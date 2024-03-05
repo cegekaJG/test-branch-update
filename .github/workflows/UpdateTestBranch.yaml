@@ -111,7 +111,7 @@ jobs:
         id: cherry_pick
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
-          git cherry-pick -n ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}
+          git cherry-pick --no-commit ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}
           if [ $? -ne 0 ]; then
             echo "::error::Cherry-pick failed. Please cherry-pick the commit '${{ steps.merge_commit.outputs.MERGE_COMMIT_MSG }} (${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}) into ${{ env.FEATURE_TEST_BRANCH}}"
             exit 1
@@ -120,8 +120,12 @@ jobs:
       - name: "On success: Commit & push cherry-picked changes"
         if: ${{ steps.cherry_pick.outcome == 'success'}}
         run: |
-          git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
-          git push origin ${{ env.FEATURE_TEST_BRANCH }}
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
+          fi
+          if [ -z "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+            git push origin ${{ env.FEATURE_TEST_BRANCH }}
+          fi
 
       - name: Cleanup cherry-pick branch
         if: ${{ steps.cherry_pick.outcome == 'success'}}
@@ -159,7 +163,7 @@ jobs:
               '`git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}`.'
             })
 
-      - name: Create pull request
+      - name: "Finally: Create pull request"
         uses: peter-evans/create-pull-request@v6
         if: ${{ steps.check_pr.outcome == 'success' }}
         with:
