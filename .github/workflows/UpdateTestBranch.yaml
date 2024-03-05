@@ -9,6 +9,7 @@ on:
       - main
 
 env:
+  TRIGGER_LABEL: "Ready 4 Test"
   TEST_BRANCH: testmaster
   CHERRY_PICK_BRANCH: ${{ github.head_ref }}-cherry-pick
   FEATURE_TEST_BRANCH: ${{ github.head_ref }}-test
@@ -18,11 +19,19 @@ jobs:
     name: Update Test Branch
     runs-on: ubuntu-latest
     steps:
-      - name: Check draft status
+      - name: Check PR status
         id: check_draft
         run: |
           if [ "${{ github.event.pull_request.draft }}" = "true" ]; then
             echo "::notice::This pull request is a draft. Update workflow cancelled."
+            exit 0
+          fi
+          if [[ "${{ github.event.pull_request.labels }}" == *"Automated"* ]]; then
+            echo "::notice::This pull request is automated. Update workflow cancelled."
+            exit 0
+          fi
+          if [ "${{ github.event.pull_request.labels }}" != *"${{ env.TRIGGER_LABEL }}"* ]; then
+            echo "::notice::This pull request has no labels. Update workflow cancelled."
             exit 0
           fi
 
@@ -98,9 +107,7 @@ jobs:
       - name: "On success: Commit & push cherry-picked changes"
         if: ${{ steps.cherry_pick.outcome == 'success'}}
         run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
-          fi
+          git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
           git branch -D ${{ env.CHERRY_PICK_BRANCH}}
 
