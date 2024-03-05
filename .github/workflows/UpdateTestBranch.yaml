@@ -102,7 +102,14 @@ jobs:
             git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
           fi
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
-          git push origin --delete ${{ env.CHERRY_PICK_BRANCH }} || true
+          git branch -D ${{ env.CHERRY_PICK_BRANCH}}
+
+      - name: Cleanup
+        if: ${{ steps.cherry_pick.outcome == 'success'}}
+        run: |
+          if [ -n "$(git ls-remote --heads origin ${{ env.CHERRY_PICK_BRANCH }})" ]; then
+            git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
+          fi
 
       - name: "On failure: Abort cherry-pick & push temporary cherry-pick branch"
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
