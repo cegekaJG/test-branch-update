@@ -9,7 +9,6 @@ on:
       - main
 
 env:
-  TRIGGER_LABEL: "Ready 4 Test"
   TEST_BRANCH: testmaster
   CHERRY_PICK_BRANCH: ${{ github.head_ref }}-cherry-pick
   FEATURE_TEST_BRANCH: ${{ github.head_ref }}-test
@@ -20,31 +19,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check PR status
-        id: check_draft
+        id: check_pr
+        continue-on-error: true
         run: |
+          if [ ${{github.head_ref}} == ${{env.TEST_BRANCH}} ]; then
+            echo "::notice::You cannot update the ${{env.TEST_BRANCH}} branch with itself. Please create a new branch and try again."
+            exit 1
+          fi
+          if [ ${{github.head_ref}} == "dev/"* ]; then
+            echo "::notice::The head branch of this pull request begins with "dev/". Changes from this branch will not be cherry-picked into the ${{env.TEST_BRANCH}} branch."
+          fi
           if [ "${{ github.event.pull_request.draft }}" = "true" ]; then
             echo "::notice::This pull request is a draft. Update workflow cancelled."
-            exit 0
+            exit 1
           fi
           if [[ "${{ github.event.pull_request.labels }}" == *"Automated"* ]]; then
             echo "::notice::This pull request is automated. Update workflow cancelled."
-            exit 0
-          fi
-          if [ "${{ github.event.pull_request.labels }}" != *"${{ env.TRIGGER_LABEL }}"* ]; then
-            echo "::notice::This pull request has no labels. Update workflow cancelled."
-            exit 0
+            exit 1
           fi
 
       - name: Set up Git
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Checkout repository
+        if: ${{ steps.check_pr.outcome == 'success' }}
         uses: actions/checkout@v4.1.1
 
       - name: Check if ${{ env.TEST_BRANCH }} exists
         id: check_test_branch
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ -z "$(git ls-remote --heads origin ${{ env.TEST_BRANCH }})" ]; then
             echo "::error::Branch ${{ env.TEST_BRANCH }} does not exist. Please create the branch and try again."
@@ -53,6 +59,7 @@ jobs:
 
       - name: Get newest commit hash
         id: get_commit_hash
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           newest_commit_hash=$(git rev-parse --short HEAD)
           echo "NEWEST_COMMIT_HASH=$newest_commit_hash" >> "$GITHUB_OUTPUT"
@@ -60,6 +67,7 @@ jobs:
 
       - name: Create temporary cherry-pick branch of target branch
         id: create_temp_branch
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git fetch origin ${{ github.base_ref }}
           git checkout ${{ github.base_ref }}
@@ -67,6 +75,7 @@ jobs:
 
       - name: Squash merge ${{ github.head_ref }} into ${{ env.CHERRY_PICK_BRANCH }}
         id: merge_commit
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git fetch origin ${{ github.head_ref }}
           merge_commit_msg="CHERRYPICK-ME ${{ github.head_ref }}/${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
@@ -83,6 +92,7 @@ jobs:
           echo "MERGE_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git fetch origin ${{ env.TEST_BRANCH }}
@@ -97,6 +107,7 @@ jobs:
       - name: Cherry-pick squash merge commit
         continue-on-error: true
         id: cherry_pick
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git cherry-pick -n ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}
           if [ $? -ne 0 ]; then
@@ -149,12 +160,14 @@ jobs:
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
+        if: ${{ steps.check_pr.outcome == 'success' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ env.FEATURE_TEST_BRANCH }}
           base: ${{ env.TEST_BRANCH }}
           title: ${{ github.event.pull_request.title}} - Test
           labels: Automated
+          assignees: ${{ github.actor }}
           body: |
             This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} into ${{ env.TEST_BRANCH }}.
             See #${{ github.event.pull_request.number }} for more details.
