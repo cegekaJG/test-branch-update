@@ -120,11 +120,11 @@ jobs:
         run: |
           git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
-          git branch -D ${{ env.CHERRY_PICK_BRANCH}}
 
       - name: Cleanup
         if: ${{ steps.cherry_pick.outcome == 'success'}}
         run: |
+          git branch -D ${{ env.CHERRY_PICK_BRANCH}}
           if [ -n "$(git ls-remote --heads origin ${{ env.CHERRY_PICK_BRANCH }})" ]; then
             git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
           fi
@@ -157,17 +157,3 @@ jobs:
               '4) Delete the branch ${{ env.CHERRY_PICK_BRANCH }} with the command ' +
               '`git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}`.'
             })
-
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@v6
-        if: ${{ steps.check_pr.outcome == 'success' }}
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ env.FEATURE_TEST_BRANCH }}
-          base: ${{ env.TEST_BRANCH }}
-          title: ${{ github.event.pull_request.title}} - Test
-          labels: Automated
-          assignees: ${{ github.actor }}
-          body: |
-            This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} into ${{ env.TEST_BRANCH }}.
-            See #${{ github.event.pull_request.number }} for more details.
