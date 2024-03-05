@@ -24,19 +24,16 @@ jobs:
         continue-on-error: true
         run: |
           if [ ${{github.head_ref}} == ${{env.TEST_BRANCH}} ]; then
-            echo "::notice::You cannot update the ${{env.TEST_BRANCH}} branch with itself. Please create a new branch and try again."
-            exit 1
+            echo "::error::You cannot update the ${{env.TEST_BRANCH}} branch with itself. Please create a new branch and try again."
           fi
           if [ ${{github.head_ref}} == "dev/"* ]; then
-            echo "::notice::The head branch of this pull request begins with "dev/". Changes from this branch will not be cherry-picked into the ${{env.TEST_BRANCH}} branch."
+            echo "::error::The head branch of this pull request begins with "dev/". Changes from this branch will not be cherry-picked into the ${{env.TEST_BRANCH}} branch."
           fi
           if [ "${{ github.event.pull_request.draft }}" = "true" ]; then
-            echo "::notice::This pull request is a draft. Update workflow cancelled."
-            exit 1
+            echo "::error::This pull request is a draft. Update workflow cancelled."
           fi
           if [[ "${{ github.event.pull_request.labels }}" == *"Automated"* ]]; then
-            echo "::notice::This pull request is automated. Update workflow cancelled."
-            exit 1
+            echo "::error::This pull request is automated. Update workflow cancelled."
           fi
 
       - name: Checkout repository
@@ -143,7 +140,7 @@ jobs:
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           fi
 
-      - name: Report merge conflict
+      - name: "On failure: Report merge conflict"
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
         uses: actions/github-script@v7
         with:
