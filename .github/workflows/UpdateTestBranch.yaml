@@ -164,8 +164,8 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          base: ${{ env.FEATURE_TEST_BRANCH }}
-          branch: ${{ env.TEST_BRANCH }}
+          branch: ${{ env.FEATURE_TEST_BRANCH }}
+          base: ${{ env.TEST_BRANCH }}
           title: ${{ github.event.pull_request.title}} - Test
           labels: Automated
           assignees: ${{ github.actor }}
