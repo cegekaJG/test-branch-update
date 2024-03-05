@@ -176,7 +176,7 @@ jobs:
             See #${{ github.event.pull_request.number }} for more details.
 
       - name: "On success: Clean up comments"
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.cherry_pick.outcome == 'success' }}
         uses: actions/github-script@v7
         with:
           script: |
