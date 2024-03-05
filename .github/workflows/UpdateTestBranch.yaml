@@ -10,7 +10,7 @@ on:
 
 env:
   TEST_BRANCH: testmaster
-  CHERRY_PICK_BRANCH: ${{ github.head_ref }}-cherry-pick
+  CPICK_BRANCH_TEMPLATE: ${{ github.head_ref }}-cherry-pick
   FEATURE_TEST_BRANCH: ${{ github.head_ref }}-test
 
 jobs:
@@ -69,11 +69,13 @@ jobs:
         id: create_temp_branch
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
+          cherry_pick_branch="${{ env.CPICK_BRANCH_TEMPLATE }}/${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
+          echo "CHERRY_PICK_BRANCH=$cherry_pick_branch" >> "$GITHUB_OUTPUT"
           git fetch origin ${{ github.base_ref }}
           git checkout ${{ github.base_ref }}
-          git checkout -b ${{ env.CHERRY_PICK_BRANCH}}
+          git checkout -b $cherry_pick_branch
 
-      - name: Squash merge ${{ github.head_ref }} into ${{ env.CHERRY_PICK_BRANCH }}
+      - name: Squash merge ${{ github.head_ref }} into temporary cherry-pick branch
         id: merge_commit
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
@@ -81,12 +83,12 @@ jobs:
           merge_commit_msg="CHERRYPICK-ME ${{ github.head_ref }}/${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
 
           git merge --squash -n "origin/${{ github.head_ref }}"
-          git commit -m "$merge_commit_msg"
-
-          if [ "$(git status --porcelain)" ]; then
+          if [ "$(git status --porcelain | grep '^U')" ]; then
             echo "::error::Unable to create squash merge commit. Please merge the latest changes to ${{ github.base_ref}} into the head branch ${{ github.head_ref }} and try again."
             exit 1
           fi
+          git commit -m "$merge_commit_msg"
+          git push origin $cherry_pick_branch
 
           echo "MERGE_COMMIT_MSG=$merge_commit_msg" >> "$GITHUB_OUTPUT"
           echo "MERGE_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -124,17 +126,16 @@ jobs:
       - name: Cleanup cherry-pick branch
         if: ${{ steps.cherry_pick.outcome == 'success'}}
         run: |
-          git branch -D ${{ env.CHERRY_PICK_BRANCH}}
-          if [ -n "$(git ls-remote --heads origin ${{ env.CHERRY_PICK_BRANCH }})" ]; then
-            git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
-          fi
+          git branch -D ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
+          git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
+          git branch | grep '${{ env.CPICK_BRANCH_TEMPLATE }}' | xargs -I {} git push origin --delete {}
 
       - name: "On failure: Discard all changes & push temporary cherry-pick branch"
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
         run: |
           git reset --hard
-          git checkout ${{ env.CHERRY_PICK_BRANCH}}
-          git push origin ${{ env.CHERRY_PICK_BRANCH}}
+          git checkout ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH}}
+          git push origin ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH}}
 
       - name: Report merge conflict
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
@@ -154,8 +155,8 @@ jobs:
               '${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"` to ' +
               'start the cherry-pick.\n' +
               '3) Resolve the merge conflicts and push the changes.\n' +
-              '4) Delete the branch ${{ env.CHERRY_PICK_BRANCH }} with the command ' +
-              '`git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}`.'
+              '4) Delete the branch ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }} with the command ' +
+              '`git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}`.'
             })
 
       - name: Create pull request
