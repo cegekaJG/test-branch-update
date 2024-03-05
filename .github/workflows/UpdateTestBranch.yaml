@@ -160,6 +160,21 @@ jobs:
               '```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```.'
             })
 
+            - name: "Finally: Create pull request"
+              uses: peter-evans/create-pull-request@v6
+              if: ${{ steps.check_pr.outcome == 'success' }}
+              with:
+                token: ${{ secrets.GITHUB_TOKEN }}
+                branch: ${{ env.FEATURE_TEST_BRANCH }}
+                base: ${{ env.TEST_BRANCH }}
+                title: ${{ github.event.pull_request.title}} - Test
+                labels: Automated
+                assignees: ${{ github.actor }}
+                draft: ${{ steps.check_pr.outcome == 'success' }}
+                body: |
+                  This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} into ${{ env.TEST_BRANCH }}.
+                  See #${{ github.event.pull_request.number }} for more details.
+
       - name: "On success: Clean up comments"
         if: ${{ steps.cherry_pick.outcome == 'success' }}
         uses: actions/github-script@v7
