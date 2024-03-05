@@ -173,8 +173,7 @@ jobs:
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
         run: |
           git reset --hard
-          git fetch origin ${{ env.TEST_BRANCH }}
-          git commit --allow-empty -m "Cherry-pick of ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }} failed. Manual resolution required."
+          git commit --allow-empty -m "Cherry-pick of ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }} failed.\n\nManual resolution required."
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
       - name: "On failure: Report merge conflict"
@@ -209,7 +208,7 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          base: ${{ env.TEST_BRANCH }}
+          branch: ${{ env.TEST_BRANCH }}
           title: ${{ github.event.pull_request.title}} - Test
           labels: Automated
           assignees: ${{ github.actor }}
