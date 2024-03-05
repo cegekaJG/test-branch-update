@@ -88,7 +88,7 @@ jobs:
           merge_commit_msg="CHERRYPICK-ME ${{ github.head_ref }}/${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
 
           git merge --squash -n "origin/${{ github.head_ref }}"
-          if [ -z "$(git status --porcelain | grep '^U')" ]; then
+          if [ -n "$(git status --porcelain | grep '^U')" ]; then
             exit 1
           fi
           git commit -m "$merge_commit_msg"
@@ -123,7 +123,7 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git cherry-pick --no-commit ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} || true
-          if [ -z "$(git status --porcelain | grep '^U')" ]; then
+          if [ -n "$(git status --porcelain | grep '^U')" ]; then
             echo "::error::Cherry-pick failed. Please cherry-pick the commit '${{ steps.merge_commit.outputs.MERGE_COMMIT_MSG }} (${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}) into ${{ env.FEATURE_TEST_BRANCH}}"
             exit 1
           fi
