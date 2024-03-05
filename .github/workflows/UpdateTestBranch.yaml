@@ -39,15 +39,15 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout repository
+        if: ${{ steps.check_pr.outcome == 'success' }}
+        uses: actions/checkout@v4.1.1
+
       - name: Set up Git
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Checkout repository
-        if: ${{ steps.check_pr.outcome == 'success' }}
-        uses: actions/checkout@v4.1.1
 
       - name: Check if ${{ env.TEST_BRANCH }} exists
         id: check_test_branch
@@ -55,8 +55,8 @@ jobs:
         run: |
           if [ -z "$(git ls-remote --heads origin ${{ env.TEST_BRANCH }})" ]; then
             echo "::error::Branch ${{ env.TEST_BRANCH }} does not exist. Please create the branch and try again."
-            exit 1
           fi
+          git fetch origin ${{ env.TEST_BRANCH }}
 
       - name: Get newest commit hash
         id: get_commit_hash
@@ -98,7 +98,6 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
-            git fetch origin ${{ env.TEST_BRANCH }}
             git checkout ${{ env.TEST_BRANCH }}
             git checkout -b ${{ env.FEATURE_TEST_BRANCH }}
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
@@ -123,11 +122,11 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
           fi
-          if [ -z "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+          if [ -z "$(git diff --stat origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           fi
 
-      - name: Cleanup cherry-pick branch
+      - name: "On success: Cleanup cherry-pick branch"
         if: ${{ steps.cherry_pick.outcome == 'success'}}
         run: |
           git branch -D ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
@@ -138,7 +137,8 @@ jobs:
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
         run: |
           git reset --hard
-          if [ -n "$(git log origin/${{ env.TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+          git fetch origin ${{ env.TEST_BRANCH }}
+          if [ -n "$(git diff --stat origin/${{ env.TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git commit --allow-empty -m "Cherry-pick of ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }} failed. Manual resolution required."
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           fi
