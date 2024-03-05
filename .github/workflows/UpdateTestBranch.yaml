@@ -129,10 +129,10 @@ jobs:
             git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
           fi
 
-      - name: "On failure: Abort cherry-pick & push temporary cherry-pick branch"
+      - name: "On failure: Discard all changes & push temporary cherry-pick branch"
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
         run: |
-          git cherry-pick --abort
+          git reset --hard
           git checkout ${{ env.CHERRY_PICK_BRANCH}}
           git push origin ${{ env.CHERRY_PICK_BRANCH}}
 
