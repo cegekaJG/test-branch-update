@@ -203,12 +203,12 @@ jobs:
         run: |
           git checkout ${{ env.FEATURE_TEST_BRANCH }}
 
+          # FIXME: Pull request won't create
       - name: "Finally: Create pull request"
         uses: peter-evans/create-pull-request@v6
         if: ${{ steps.check_pr.outcome == 'success' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ env.TEST_BRANCH }}
           title: ${{ github.event.pull_request.title}} - Test
           labels: Automated
           assignees: ${{ github.actor }}
