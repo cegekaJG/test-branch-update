@@ -148,6 +148,27 @@ jobs:
           git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
           git branch | grep '${{ env.CPICK_BRANCH_TEMPLATE }}' | xargs -I {} git push origin --delete {}
 
+      - name: "On success: Clean up comments"
+        if: ${{ steps.cherry_pick.outcome == 'success' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            }).then(comments => {
+              comments.data.forEach(comment => {
+                if (comment.user.login === 'github-actions[bot]' && comment.body.includes('${{ env.BOT_COMMENT_TAG }}')) {
+                  github.rest.issues.deleteComment({
+                    comment_id: comment.id,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo
+                  })
+                }
+              })
+            })
+
       - name: "On failure: Abort cherry-pick & add empty commit"
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
         run: |
@@ -178,12 +199,16 @@ jobs:
               '```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```.'
             })
 
+      - name: "Finally: Checkout ${{ env.FEATURE_TEST_BRANCH}}"
+        if: ${{ steps.check_pr.outcome == 'success' }}
+        run: |
+          git checkout ${{ env.FEATURE_TEST_BRANCH }}
+
       - name: "Finally: Create pull request"
         uses: peter-evans/create-pull-request@v6
         if: ${{ steps.check_pr.outcome == 'success' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ env.FEATURE_TEST_BRANCH }}
           base: ${{ env.TEST_BRANCH }}
           title: ${{ github.event.pull_request.title}} - Test
           labels: Automated
@@ -192,24 +217,3 @@ jobs:
           body: |
             This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} into ${{ env.TEST_BRANCH }}.
             See #${{ github.event.pull_request.number }} for more details.
-
-      - name: "On success: Clean up comments"
-        if: ${{ steps.cherry_pick.outcome == 'success' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            }).then(comments => {
-              comments.data.forEach(comment => {
-                if (comment.user.login === 'github-actions[bot]' && comment.body.includes('${{ env.BOT_COMMENT_TAG }}')) {
-                  github.rest.issues.deleteComment({
-                    comment_id: comment.id,
-                    owner: context.repo.owner,
-                    repo: context.repo.repo
-                  })
-                }
-              })
-            })
