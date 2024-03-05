@@ -60,8 +60,6 @@ jobs:
         id: merge_commit
         run: |
           git fetch origin ${{ github.head_ref }}
-          git branch --all | grep ${{ github.head_ref}}
-
           merge_commit_msg="CHERRYPICK-ME ${{ github.head_ref }}/${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
 
           git merge --squash -n "origin/${{ github.head_ref }}"
@@ -99,7 +97,7 @@ jobs:
             git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
           fi
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
-          git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
+          git push origin --delete ${{ env.CHERRY_PICK_BRANCH }} || true
 
       - name: "On failure: Abort cherry-pick & push temporary cherry-pick branch"
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
