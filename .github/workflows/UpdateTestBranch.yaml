@@ -109,7 +109,7 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git cherry-pick --no-commit ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} || true
-          if [ $? -ne 0 ]; then
+          if [ -n "$(git status --porcelain | grep '^U')" ]; then
             echo "::error::Cherry-pick failed. Please cherry-pick the commit '${{ steps.merge_commit.outputs.MERGE_COMMIT_MSG }} (${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}) into ${{ env.FEATURE_TEST_BRANCH}}"
           fi
 
