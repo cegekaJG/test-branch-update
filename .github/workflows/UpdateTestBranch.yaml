@@ -88,7 +88,7 @@ jobs:
             exit 1
           fi
           git commit -m "$merge_commit_msg"
-          git push origin $cherry_pick_branch
+          git push origin "$cherry_pick_branch"
 
           echo "MERGE_COMMIT_MSG=$merge_commit_msg" >> "$GITHUB_OUTPUT"
           echo "MERGE_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
