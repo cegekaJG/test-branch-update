@@ -119,7 +119,7 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
           fi
-          if [ -z "$(git diff --stat origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+          if [ -z "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           fi
 
@@ -135,10 +135,8 @@ jobs:
         run: |
           git reset --hard
           git fetch origin ${{ env.TEST_BRANCH }}
-          if [ -n "$(git diff --stat origin/${{ env.TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
-            git commit --allow-empty -m "Cherry-pick of ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }} failed. Manual resolution required."
-            git push origin ${{ env.FEATURE_TEST_BRANCH }}
-          fi
+          git commit --allow-empty -m "Cherry-pick of ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }} failed. Manual resolution required."
+          git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
       - name: "On failure: Report merge conflict"
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
@@ -172,6 +170,7 @@ jobs:
           title: ${{ github.event.pull_request.title}} - Test
           labels: Automated
           assignees: ${{ github.actor }}
+          draft: ${{ steps.check_pr.outcome == 'success' }}
           body: |
             This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} into ${{ env.TEST_BRANCH }}.
             See #${{ github.event.pull_request.number }} for more details.
