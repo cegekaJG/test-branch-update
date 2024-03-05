@@ -77,7 +77,8 @@ jobs:
         run: |
           if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git fetch origin ${{ env.TEST_BRANCH }}
-            git checkout -b ${{ env.FEATURE_TEST_BRANCH }} ${{ env.TEST_BRANCH}}
+            git checkout ${{ env.TEST_BRANCH }}
+            git checkout -b ${{ env.FEATURE_TEST_BRANCH }}
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           else
             git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
