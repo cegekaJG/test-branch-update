@@ -220,7 +220,7 @@ jobs:
           fi
 
       - name: Clean up comments
-        if: ${{ steps.cherry_pick.outcome == 'success' }}
+        if: ${{ steps.check_pr.outcome == 'success' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -250,7 +250,7 @@ jobs:
             })
 
       - name: Comment on the new pull request
-        if: ${{ steps.cherry_pick.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
+        if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body \
             '${{ env.BOT_COMMENT_TAG }}\n' +
@@ -271,11 +271,11 @@ jobs:
         run: |
           body="${{ env.BOT_COMMENT_TAG }}\n"
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
-            body+='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.\n' +
-            'A new pull request has been created to test the changes.'
+            body+='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.
+            A new pull request has been created to test the changes.'
           else
-            body+='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.\n' +
-            'A new pull request has been created to manually resolve the merge conflicts and test the changes.'
+            body+='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.
+            A new pull request has been created to manually resolve the merge conflicts and test the changes.'
           fi
           body+='See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
           gh pr comment ${{ github.event.pull_request.url }} --body $body
