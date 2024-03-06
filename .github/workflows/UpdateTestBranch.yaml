@@ -204,7 +204,7 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ -z "$(gh label list --search ${{ env.LABEL }} --limit 1)" ]; then
-            gh label create ${{ env.LABEL }} --color 777777 -description "Automated pull requests"
+            gh label create ${{ env.LABEL }} --color 777777 --description "Automated pull requests"
             echo "::notice::Label ${{ env.LABEL }} added to repository."
           fi
 
