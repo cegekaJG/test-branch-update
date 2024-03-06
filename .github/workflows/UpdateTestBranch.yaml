@@ -86,7 +86,7 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           git fetch origin ${{ github.head_ref }}
-          merge_commit_msg="CHERRYPICK-ME ${{ github.head_ref }}/${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
+          merge_commit_msg='Cherry-pick changes from `${{ github.head_ref }}` up to `${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}`'
 
           git merge --squash -n "origin/${{ github.head_ref }}"
           if [ -n "$(git status --porcelain | grep '^U')" ]; then
@@ -136,7 +136,7 @@ jobs:
         if: ${{ steps.cherry_pick.outcome == 'success' }}
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m 'Cherry-pick changes from `${{ github.head_ref }}` up to `${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}`'
+            git commit -m '${{ steps.merge_commit.outputs.MERGE_COMMIT_MSG }}'
           fi
           if [ -z "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
@@ -230,19 +230,18 @@ jobs:
         id: comment_new_pr
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          body='${{ env.TEST_BRANCH }} update failed.
+          body='**${{ env.TEST_BRANCH }} update failed.**
           To manually resolve the merge conflicts, please follow these steps:
 
-          1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:
+          1) Checkout the latest version of the branch `${{ env.FEATURE_TEST_BRANCH }}` with the following commands:
           ```
+          git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
+          git pull origin ${{ env.FEATURE_TEST_BRANCH }}
           git checkout ${{ env.FEATURE_TEST_BRANCH }}
+          git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -e
           ```
-          2) In a terminal with Git, enter the following command to start the cherry-pick:
-          ```
-          git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
-          ```
-          3) Resolve the merge conflicts and push the changes.
-          4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
+          2) Resolve the merge conflicts and push the changes.
+          3) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
 
           ```
           git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
@@ -256,11 +255,11 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
-            body='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.
+            body='The cherry-picked changes from `${{ github.head_ref }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
 
             A new pull request has been created to test the changes. See ${{ steps.comment_new_pr.outputs.COMMENT_URL }} for more details.'
           else
-            body='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.
+            body='Unable to cherry-pick the changes from `${{ github.head_ref }}` to the `${{ env.TEST_BRANCH }}` branch.
 
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.comment_new_pr.outputs.COMMENT_URL }} for more details.'
           fi
