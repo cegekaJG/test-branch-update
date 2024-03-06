@@ -37,7 +37,7 @@ jobs:
               core.setFailed(`The head branch of this pull request begins with "${{ env.SKIP_TAG }}/". Changes from this branch will not be cherry-picked into the ${process.env.TEST_BRANCH} branch.`);
             }
             const triggerLabel = "${{ env.TRIGGER_LABEL }}";
-            const eventLabel = github.event.label.name;
+            const eventLabel = context.payload.label.name;
             if (eventLabel !== triggerLabel) {
               core.setFailed(`The label "${eventLabel}" is not the required label "${triggerLabel}".`);
             }
@@ -53,6 +53,7 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Ensure trigger label exists
+        if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ -z "$(gh label list --search "${{ env.TRIGGER_LABEL }}" --limit 1)" ]; then
             gh label create ${{ env.TRIGGER_LABEL }} --color 9ABE8F --description "Ready to be added to the test branch."
