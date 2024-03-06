@@ -24,6 +24,15 @@ jobs:
     name: Update Test Branch
     runs-on: ubuntu-latest
     steps:
+      - name: Ensure trigger label exists
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if [ -z "$(gh label list --search ${{ env.TRIGGER_LABEL }} --limit 1)" ]; then
+              gh label create ${{ env.TRIGGER_LABEL }} --color 9ABE8F --description "This pull request is ready to be merged into the test branch."
+              echo "::notice::Label ${{ env.TRIGGER_LABEL }} added to repository."
+            fi
+
       - name: Check PR status
         id: check_pr
         continue-on-error: true
@@ -103,7 +112,7 @@ jobs:
           echo "MERGE_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Report Error
-        if: ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA == '' }}
+        if: ${{ steps.check_pr.outcome == 'success' && steps.merge_commit.outputs.MERGE_COMMIT_SHA == '' }}
         uses: actions/github-script@v7
         with:
           script:
@@ -161,7 +170,7 @@ jobs:
           Manual resolution required.'
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
-      - name: Ensure label exists
+      - name: Ensure bot label exists
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ -z "$(gh label list --search ${{ env.BOT_LABEL }} --limit 1)" ]; then
