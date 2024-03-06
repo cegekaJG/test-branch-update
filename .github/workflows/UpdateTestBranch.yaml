@@ -25,9 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ensure trigger label exists
-        uses: actions/github-script@v7
-        with:
-          script: |
+        run: |
             if [ -z "$(gh label list --search ${{ env.TRIGGER_LABEL }} --limit 1)" ]; then
               gh label create ${{ env.TRIGGER_LABEL }} --color 9ABE8F --description "This pull request is ready to be merged into the test branch."
               echo "::notice::Label ${{ env.TRIGGER_LABEL }} added to repository."
