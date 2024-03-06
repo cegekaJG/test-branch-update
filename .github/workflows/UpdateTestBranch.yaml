@@ -192,7 +192,7 @@ jobs:
               '${{ env.TEST_BRANCH }} update failed.\n' +
               'To manually resolve the merge conflicts, please follow these steps:\n\n' +
               '1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:\n' +
-              '```git checkout ${{ env.FEATURE_TEST_BRANCH }}```\n'
+              '```git checkout ${{ env.FEATURE_TEST_BRANCH }}```\n' +
               '2) In a terminal with Git, enter the following command to start the cherry-pick:\n' +
               '```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m ' +
               '"Cherry-pick changes from ${{ github.head_ref }} up to ' +
