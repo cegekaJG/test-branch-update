@@ -253,8 +253,7 @@ jobs:
       - name: Comment on the new pull request
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          body="${{ env.BOT_COMMENT_TAG }}
-          ${{ env.TEST_BRANCH }} update failed.
+          body="${{ env.TEST_BRANCH }} update failed.
           To manually resolve the merge conflicts, please follow these steps:
 
           1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:
@@ -270,20 +269,18 @@ jobs:
 
           ```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```"
 
-          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "$body"
+          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}$body"
 
       - name: Comment on the original pull request
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          body="${{ env.BOT_COMMENT_TAG }}\n"
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
-            body+='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.
+            body='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.
 
-            A new pull request has been created to test the changes.'
+            A new pull request has been created to test the changes. See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
           else
-            body+='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.
+            body='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.
 
-            A new pull request has been created to manually resolve the merge conflicts and test the changes.'
+            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
           fi
-          body+='See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
-          gh pr comment ${{ github.event.pull_request.url }} --body "$body"
+          gh pr comment ${{ github.event.pull_request.id }} --body "${{ env.BOT_COMMENT_TAG }}$body"
