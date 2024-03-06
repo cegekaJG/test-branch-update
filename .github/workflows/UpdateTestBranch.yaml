@@ -283,4 +283,4 @@ jobs:
 
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
           fi
-          gh pr comment ${{ github.event.pull_request.id }} --body "${{ env.BOT_COMMENT_TAG }}$body"
+          gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}$body"
