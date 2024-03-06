@@ -249,6 +249,7 @@ jobs:
           ```'
 
           COMMENT_URL=$(gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}$body")
+          echo $COMMENT_URL
           echo "COMMENT_URL=$COMMENT_URL" >> "$GITHUB_OUTPUT"
 
       - name: Comment on the original pull request
