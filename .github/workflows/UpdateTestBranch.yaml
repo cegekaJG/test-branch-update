@@ -161,7 +161,7 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ -z "$(gh label list --search ${{ env.LABEL }} --limit 1)" ]; then
-            gh label create ${{ env.LABEL }} --color 777777 --description "Automated pull requests"
+            gh label create ${{ env.LABEL }} --color AAAAAA --description "Automated pull requests"
             echo "::notice::Label ${{ env.LABEL }} added to repository."
           fi
 
@@ -242,12 +242,13 @@ jobs:
           ```
           2) Resolve the merge conflicts and push the changes.
           3) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
-
           ```
           git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
-          ```'
+          ```
+          4) Mark the pull request as ready for review to trigger the status checks.'
 
-          COMMENT_URL=$(gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}$body")
+          COMMENT_URL=$(gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}
+          $body")
           echo $COMMENT_URL
           echo "COMMENT_URL=$COMMENT_URL" >> "$GITHUB_OUTPUT"
 
@@ -263,4 +264,5 @@ jobs:
 
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.comment_new_pr.outputs.COMMENT_URL }} for more details.'
           fi
-          gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}$body"
+          gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}
+          $body"
