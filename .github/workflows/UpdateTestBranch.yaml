@@ -227,25 +227,29 @@ jobs:
             })
 
       - name: Comment on the new pull request
+        id: comment_new_pr
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           body='${{ env.TEST_BRANCH }} update failed.
           To manually resolve the merge conflicts, please follow these steps:
 
           1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:
-          ```git checkout ${{ env.FEATURE_TEST_BRANCH }}```
+          ```
+          git checkout ${{ env.FEATURE_TEST_BRANCH }}
+          ```
           2) In a terminal with Git, enter the following command to start the cherry-pick:
-
-          ```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m \
-          "Cherry-pick changes from ${{ github.head_ref }} up to \
-          ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```
-
+          ```
+          git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
+          ```
           3) Resolve the merge conflicts and push the changes.
           4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
 
-          ```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```'
+          ```
+          git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
+          ```'
 
-          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}$body"
+          COMMENT_URL=$(gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}$body")
+          echo "COMMENT_URL=$COMMENT_URL" >> "$GITHUB_OUTPUT"
 
       - name: Comment on the original pull request
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
@@ -253,10 +257,10 @@ jobs:
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.
 
-            A new pull request has been created to test the changes. See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
+            A new pull request has been created to test the changes. See ${{ steps.comment_new_pr.outputs.COMMENT_URL }} for more details.'
           else
             body='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.
 
-            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
+            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.comment_new_pr.outputs.COMMENT_URL }} for more details.'
           fi
           gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}$body"
