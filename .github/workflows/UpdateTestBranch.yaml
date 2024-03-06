@@ -149,27 +149,6 @@ jobs:
           git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}
           git branch | grep '${{ env.CPICK_BRANCH_TEMPLATE }}' | xargs -I {} git push origin --delete {}
 
-      - name: "On success: Clean up comments"
-        if: ${{ steps.cherry_pick.outcome == 'success' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            }).then(comments => {
-              comments.data.forEach(comment => {
-                if (comment.user.login === 'github-actions[bot]' && comment.body.includes('${{ env.BOT_COMMENT_TAG }}')) {
-                  github.rest.issues.deleteComment({
-                    comment_id: comment.id,
-                    owner: context.repo.owner,
-                    repo: context.repo.repo
-                  })
-                }
-              })
-            })
-
       - name: "On failure: Abort cherry-pick & add empty commit"
         if: ${{ steps.cherry_pick.outcome == 'failure' }}
         run: |
@@ -239,3 +218,64 @@ jobs:
           else
             gh pr ready --undo ${{ env.FEATURE_TEST_BRANCH }}
           fi
+
+      - name: Clean up comments
+        if: ${{ steps.cherry_pick.outcome == 'success' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const urlSubstrings = "${{ steps.create_pr.outputs.TEST_PR_URL }}".split('/')
+            const newPrNumber = urlSubstrings[urlSubstrings.length - 1]
+            const oldPrComments = github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            })
+            const newPrComments = github.rest.issues.listComments({
+              issue_number: newPrNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            })
+            const allComments = Promise.all([oldPrComments, newPrComments])
+            allComments.forEach(comments => {
+              comments.data.forEach(comment => {
+                if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ env.BOT_COMMENT_TAG }}')) {
+                  github.rest.issues.deleteComment({
+                    comment_id: comment.id,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo
+                  })
+                }
+              })
+            })
+
+      - name: Comment on the new pull request
+        if: ${{ steps.cherry_pick.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
+        run: |
+          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body \
+            '${{ env.BOT_COMMENT_TAG }}\n' +
+            '${{ env.TEST_BRANCH }} update failed.\n' +
+            'To manually resolve the merge conflicts, please follow these steps:\n\n' +
+            '1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:\n' +
+            '```git checkout ${{ env.FEATURE_TEST_BRANCH }}```\n' +
+            '2) In a terminal with Git, enter the following command to start the cherry-pick:\n' +
+            '```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m ' +
+            '"Cherry-pick changes from ${{ github.head_ref }} up to ' +
+            '${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```\n' +
+            '3) Resolve the merge conflicts and push the changes.\n' +
+            '4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:\n' +
+            '```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```.'
+
+      - name: Comment on the original pull request
+        if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
+        run: |
+          body="${{ env.BOT_COMMENT_TAG }}\n"
+          if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
+            body+='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.\n' +
+            'A new pull request has been created to test the changes.'
+          else
+            body+='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.\n' +
+            'A new pull request has been created to manually resolve the merge conflicts and test the changes.'
+          fi
+          body+='See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
+          gh pr comment ${{ github.event.pull_request.url }} --body $body
