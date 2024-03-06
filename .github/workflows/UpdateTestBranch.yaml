@@ -245,7 +245,7 @@ jobs:
 
           \`\`\`git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}\`\`\`'
 
-          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body '${{ env.BOT_COMMENT_TAG }}$body'
+          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}$body"
 
       - name: Comment on the original pull request
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
@@ -259,4 +259,4 @@ jobs:
 
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
           fi
-          gh pr comment ${{ github.event.pull_request.number }} --body '${{ env.BOT_COMMENT_TAG }}$body'
+          gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}$body"
