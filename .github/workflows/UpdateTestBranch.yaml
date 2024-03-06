@@ -230,7 +230,7 @@ jobs:
           fi
 
       - name: Set pull request status
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.cherry_pick.outcome == 'success' }}
         run: |
           if [ ${{ steps.merge_commit.outcome == 'success' }} ]; then
             gh pr ready ${{ env.FEATURE_TEST_BRANCH }}
