@@ -26,10 +26,10 @@ jobs:
     steps:
       - name: Ensure trigger label exists
         run: |
-            if [ -z "$(gh label list --search ${{ env.TRIGGER_LABEL }} --limit 1)" ]; then
-              gh label create ${{ env.TRIGGER_LABEL }} --color 9ABE8F --description "This pull request is ready to be merged into the test branch."
-              echo "::notice::Label ${{ env.TRIGGER_LABEL }} added to repository."
-            fi
+          if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
+            gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
+            echo "::notice::Label ${{ env.BOT_LABEL }} added to repository."
+          fi
 
       - name: Check PR status
         id: check_pr
@@ -168,7 +168,7 @@ jobs:
       - name: Ensure bot label exists
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
-          if [ -z "$(gh label list --search ${{ env.BOT_LABEL }} --limit 1)" ]; then
+          if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
             gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
             echo "::notice::Label ${{ env.BOT_LABEL }} added to repository."
           fi
