@@ -232,7 +232,7 @@ jobs:
       - name: Set pull request status
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
-          if [ ${{ steps.cherry_pick.outcome == 'success' }} ]; then
+          if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             gh pr ready ${{ env.FEATURE_TEST_BRANCH }}
             echo "Pull request of ${{ env.FEATURE_TEST_BRANCH }} is ready for review."
           else
