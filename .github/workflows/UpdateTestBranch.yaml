@@ -245,7 +245,7 @@ jobs:
                     owner: context.repo.owner,
                     repo: context.repo.repo
                   })
-                  process.stdout.write(`Deleted comment ${comment.id} from ${comment.url}.`)
+                  process.stdout.write(`Deleted comment ${comment.html_url}.\n`)
                 }
               })
             })
