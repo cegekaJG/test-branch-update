@@ -224,7 +224,7 @@ jobs:
               See #${{ github.event.pull_request.number }} for more details."
             echo "::notice::Pull request of ${{ env.FEATURE_TEST_BRANCH }} created."
           else
-            gh pr update ${{ env.FEATURE_TEST_BRANCH }} \
+            gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
               --add-assignee ${{ github.actor }}
             echo "::notice::Pull request of ${{ env.FEATURE_TEST_BRANCH }} updated."
           fi
