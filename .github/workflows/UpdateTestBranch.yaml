@@ -103,7 +103,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script:
-            core.setFailed('Unable to create squash merge commit. Please merge the latest changes to ${{ github.base_ref }} into the head branch ${{ github.head_ref }} and try again.')
+            core.setFailed('Unable to create squash merge commit. Please merge the latest changes to \`${{ github.base_ref }}\` into the head branch \`${{ github.head_ref }}\` and try again.')
 
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
         if: ${{ steps.check_pr.outcome == 'success' }}
@@ -126,7 +126,7 @@ jobs:
           git cherry-pick --no-commit ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} || true
           git status --porcelain | grep '^U'
           if [ -n "$(git status --porcelain | grep '^U')" ]; then
-            echo "::error::Cherry-pick failed. Please cherry-pick the commit '${{ steps.merge_commit.outputs.MERGE_COMMIT_MSG }} (${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}) into ${{ env.FEATURE_TEST_BRANCH }}"
+            echo "::error::Cherry-pick failed. Please cherry-pick the commit '${{ steps.merge_commit.outputs.MERGE_COMMIT_MSG }}' (\`${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }}\`) into \`${{ env.FEATURE_TEST_BRANCH }}\` manually."
             exit 1
           else
             echo "Cherry-pick successful."
@@ -136,7 +136,7 @@ jobs:
         if: ${{ steps.cherry_pick.outcome == 'success' }}
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Cherry-pick changes from ${{ github.head_ref }} up to ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
+            git commit -m "Cherry-pick changes from \`${{ github.head_ref }}\` up to \`${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}\`"
           fi
           if [ -z "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
@@ -153,33 +153,9 @@ jobs:
         if: ${{ steps.cherry_pick.outcome == 'failure' }}
         run: |
           git reset --hard
-          git commit --allow-empty -m "Cherry-pick of "${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}" failed.
+          git commit --allow-empty -m "Cherry-pick of \`${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}\` failed.
           Manual resolution required."
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
-
-      # TODO: Post this comment to the new pull request instead & leave a comment on the original pull request with a link to the new pull request.
-      - name: "On failure: Report merge conflict"
-        if: ${{ steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '${{ env.BOT_COMMENT_TAG }}\n' +
-              '${{ env.TEST_BRANCH }} update failed.\n' +
-              'To manually resolve the merge conflicts, please follow these steps:\n\n' +
-              '1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:\n' +
-              '```git checkout ${{ env.FEATURE_TEST_BRANCH }}```\n' +
-              '2) In a terminal with Git, enter the following command to start the cherry-pick:\n' +
-              '```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m ' +
-              '"Cherry-pick changes from ${{ github.head_ref }} up to ' +
-              '${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```\n' +
-              '3) Resolve the merge conflicts and push the changes.\n' +
-              '4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:\n' +
-              '```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```.'
-            })
 
       - name: Ensure label exists
         if: ${{ steps.check_pr.outcome == 'success' }}
@@ -200,7 +176,7 @@ jobs:
               --title "${{ github.event.pull_request.title }} - Test" \
               --label ${{ env.LABEL }} \
               --assignee ${{ github.actor }} \
-              --body "This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} to ${{ env.TEST_BRANCH }}.
+              --body "This automated pull request adds the cherry-picked changes from \`${{ github.head_ref }}\` to \`${{ env.TEST_BRANCH }}\`.
               See #${{ github.event.pull_request.number }} for more details.")
             echo "::notice::$TEST_PR_URL created."
           else
@@ -257,17 +233,17 @@ jobs:
           To manually resolve the merge conflicts, please follow these steps:
 
           1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:
-          ```git checkout ${{ env.FEATURE_TEST_BRANCH }}```
+          \`\`\`git checkout ${{ env.FEATURE_TEST_BRANCH }}\`\`\`
           2) In a terminal with Git, enter the following command to start the cherry-pick:
 
-          ```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m \
+          \`\`\`git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m \
           "Cherry-pick changes from ${{ github.head_ref }} up to \
-          ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```
+          ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"\`\`\`
 
           3) Resolve the merge conflicts and push the changes.
-          4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
+          4) Delete the branch \`${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}\` with the following command:
 
-          ```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```"
+          \`\`\`git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}\`\`\`"
 
           gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}$body"
 
