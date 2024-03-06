@@ -254,18 +254,22 @@ jobs:
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body \
-            '${{ env.BOT_COMMENT_TAG }}\n' + \
-            '${{ env.TEST_BRANCH }} update failed.\n' + \
-            'To manually resolve the merge conflicts, please follow these steps:\n\n' + \
-            '1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:\n' + \
-            '```git checkout ${{ env.FEATURE_TEST_BRANCH }}```\n' + \
-            '2) In a terminal with Git, enter the following command to start the cherry-pick:\n' + \
-            '```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m ' + \
-            '"Cherry-pick changes from ${{ github.head_ref }} up to ' + \
-            '${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```\n' + \
-            '3) Resolve the merge conflicts and push the changes.\n' + \
-            '4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:\n' + \
-            '```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```.'
+            '${{ env.BOT_COMMENT_TAG }}
+            ${{ env.TEST_BRANCH }} update failed.
+            To manually resolve the merge conflicts, please follow these steps:
+
+            1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:
+            ```git checkout ${{ env.FEATURE_TEST_BRANCH }}```
+            2) In a terminal with Git, enter the following command to start the cherry-pick:
+
+            ```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m \
+            "Cherry-pick changes from ${{ github.head_ref }} up to \
+            ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```
+
+            3) Resolve the merge conflicts and push the changes.
+            4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
+
+            ```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```'
 
       - name: Comment on the original pull request
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
@@ -273,9 +277,11 @@ jobs:
           body="${{ env.BOT_COMMENT_TAG }}\n"
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body+='The cherry-picked changes from ${{ github.head_ref }} are ready to be added to the ${{ env.TEST_BRANCH }} branch.
+
             A new pull request has been created to test the changes.'
           else
             body+='Unable to cherry-pick the changes from ${{ github.head_ref }} to the ${{ env.TEST_BRANCH }} branch.
+
             A new pull request has been created to manually resolve the merge conflicts and test the changes.'
           fi
           body+='See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
