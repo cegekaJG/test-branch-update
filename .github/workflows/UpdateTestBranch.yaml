@@ -3,17 +3,18 @@ name: Update Test Branch
 on:
   pull_request:
     types:
-      - opened
-      - synchronize
+      labeled
     branches:
+      - master
       - main
 
 env:
   TEST_BRANCH: testmaster
   CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
   FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
+  TRIGGER_LABEL: Ready for Test
   BOT_COMMENT_TAG: <!-- Test -->
-  LABEL: Automated
+  BOT_LABEL: Automated
   SKIP_TAG: skip
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   DISABLE_COMMENTS: false
@@ -38,6 +39,9 @@ jobs:
             if (context.payload.pull_request.head.ref.startsWith('${{ env.SKIP_TAG }}/')) {
               core.setFailed(`The head branch of this pull request begins with "${{ env.SKIP_TAG }}/". Changes from this branch will not be cherry-picked into the ${process.env.TEST_BRANCH} branch.`);
             }
+            if [ "${{ github.event.label.name }}" != "${{ env.TRIGGER_LABEL }}" ]; then
+              core.setFailed('The label "${{ github.event.label.name }}" is not the required label "${{ env.TRIGGER_LABEL }}".');
+            fi
 
       - name: Checkout repository
         if: ${{ steps.check_pr.outcome == 'success' }}
@@ -160,9 +164,9 @@ jobs:
       - name: Ensure label exists
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
-          if [ -z "$(gh label list --search ${{ env.LABEL }} --limit 1)" ]; then
-            gh label create ${{ env.LABEL }} --color AAAAAA --description "Automated pull requests"
-            echo "::notice::Label ${{ env.LABEL }} added to repository."
+          if [ -z "$(gh label list --search ${{ env.BOT_LABEL }} --limit 1)" ]; then
+            gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
+            echo "::notice::Label ${{ env.BOT_LABEL }} added to repository."
           fi
 
       - name: Create/Update pull request
@@ -174,7 +178,7 @@ jobs:
               --base ${{ env.TEST_BRANCH }} \
               --head ${{ env.FEATURE_TEST_BRANCH }} \
               --title "${{ github.event.pull_request.title }} - Test" \
-              --label ${{ env.LABEL }} \
+              --label ${{ env.BOT_LABEL }} \
               --assignee ${{ github.actor }} \
               --body 'This automated pull request adds the cherry-picked changes from `${{ github.head_ref }}` to `${{ env.TEST_BRANCH }}`.
               See #${{ github.event.pull_request.number }} for more details.')
@@ -267,3 +271,8 @@ jobs:
           fi
           gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}
           $body"
+
+      - name: Remove label from original pull request
+        if: ${{ steps.check_pr.outcome == 'success' }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --remove-label ${{ env.TRIGGER_LABEL }}
