@@ -13,6 +13,8 @@ env:
   CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
   FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
   BOT_COMMENT_TAG: <!-- Test -->
+  LABELS: Automated
+  SKIP_TAG: skip
 
 jobs:
   update_test_branch:
@@ -28,14 +30,11 @@ jobs:
             if (context.payload.pull_request.draft) {
               core.setFailed('This pull request is a draft. Update workflow cancelled.');
             }
-            if (context.payload.pull_request.labels.some(label => label.name === 'Automated')) {
-              core.setFailed('This pull request is automated. Update workflow cancelled.');
-            }
             if (context.payload.pull_request.head.ref === process.env.TEST_BRANCH) {
-              core.setFailed(`You cannot update the ${process.env.TEST_BRANCH} branch with itself. Please create a new branch and try again.`);
+              core.setFailed(`You cannot update the ${process.env.TEST_BRANCH} branch with itself. Please use a different branch.`);
             }
-            if (context.payload.pull_request.head.ref.startsWith('dev/')) {
-              core.setFailed(`The head branch of this pull request begins with "dev/". Changes from this branch will not be cherry-picked into the ${process.env.TEST_BRANCH} branch.`);
+            if (context.payload.pull_request.head.ref.startsWith('${{ env.SKIP_TAG }}/')) {
+              core.setFailed(`The head branch of this pull request begins with "${{ env.SKIP_TAG }}/". Changes from this branch will not be cherry-picked into the ${process.env.TEST_BRANCH} branch.`);
             }
 
       - name: Checkout repository
@@ -173,7 +172,7 @@ jobs:
         if: ${{ steps.cherry_pick.outcome == 'failure'}}
         run: |
           git reset --hard
-          git commit --allow-empty -m "Cherry-pick of ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }} failed.
+          git commit --allow-empty -m "Cherry-pick of `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` failed.
           Manual resolution required."
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
@@ -199,21 +198,27 @@ jobs:
               '```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```.'
             })
 
-      - name: "Finally: Checkout ${{ env.FEATURE_TEST_BRANCH}}"
+      - name: "Finally: Create pull request"
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
-          git checkout ${{ env.FEATURE_TEST_BRANCH }}
+          if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ github.head_ref }} --state open | wc -l)" == 0 ]; then
+            gh pr create \
+              --base ${{ env.TEST_BRANCH }} \
+              --head ${{ github.head_ref }} \
+              --title "${{ github.event.pull_request.title}} - Test" \
+              --label ${{ env.LABELS }} \
+              --assignee ${{ github.actor }} \
+              --draft ${{ steps.merge_commit.outcome == 'success' }} \
+              --body "This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} to ${{ env.TEST_BRANCH }}.
+            See #${{ github.event.pull_request.number }} for more details."
+          else
+            gh pr update ${{ github.head_ref }} \
+              --add-assignee ${{ github.actor }}
 
-      - name: "Finally: Create pull request"
-        uses: peter-evans/create-pull-request@v6
-        if: ${{ steps.check_pr.outcome == 'success' }}
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: ${{ env.TEST_BRANCH }}
-          title: ${{ github.event.pull_request.title}} - Test
-          labels: Automated
-          assignees: ${{ github.actor }}
-          draft: ${{ steps.check_pr.outcome == 'success' }}
-          body: |
-            This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} into ${{ env.TEST_BRANCH }}.
-            See #${{ github.event.pull_request.number }} for more details.
+            if [ ${{ steps.merge_commit.outcome == 'success' }} ]; then
+              gh pr ready ${{ github.head_ref }}
+            else
+              gh pr ready --undo ${{ github.head_ref }}
+            fi
+          fi
+
