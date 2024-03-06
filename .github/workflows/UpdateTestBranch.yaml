@@ -282,4 +282,4 @@ jobs:
       - name: Remove label from original pull request
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
-          gh pr edit ${{ github.event.pull_request.number }} --remove-label ${{ env.TRIGGER_LABEL }}
+          gh pr edit ${{ github.event.pull_request.number }} --remove-label "${{ env.TRIGGER_LABEL }}"
