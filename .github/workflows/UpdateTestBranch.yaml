@@ -174,7 +174,7 @@ jobs:
         if: ${{ steps.cherry_pick.outcome == 'failure' }}
         run: |
           git reset --hard
-          git commit --allow-empty -m "Cherry-pick of `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` failed.
+          git commit --allow-empty -m "Cherry-pick of "${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}" failed.
           Manual resolution required."
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
@@ -211,10 +211,11 @@ jobs:
           fi
 
       - name: Create/Update pull request
+        id: create_pr
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ env.FEATURE_TEST_BRANCH }} --state open | wc -l)" == 0 ]; then
-            gh pr create \
+            TEST_PR_URL=$(gh pr create \
               --base ${{ env.TEST_BRANCH }} \
               --head ${{ env.FEATURE_TEST_BRANCH }} \
               --title "${{ github.event.pull_request.title }} - Test" \
@@ -222,20 +223,19 @@ jobs:
               --assignee ${{ github.actor }} \
               --body "This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} to ${{ env.TEST_BRANCH }}.
               See #${{ github.event.pull_request.number }} for more details."
-            echo "::notice::Pull request of ${{ env.FEATURE_TEST_BRANCH }} created."
+            echo "::notice::$TEST_PR_URL created.")
           else
-            gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
+            TEST_PR_URL=$(gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
               --add-assignee ${{ github.actor }}
-            echo "::notice::Pull request of ${{ env.FEATURE_TEST_BRANCH }} updated."
+            echo "::notice::$TEST_PR_URL updated.")
           fi
+          echo "TEST_PR_URL=$TEST_PR_URL" >> "$GITHUB_OUTPUT"
 
       - name: Set pull request status
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             gh pr ready ${{ env.FEATURE_TEST_BRANCH }}
-            echo "Pull request of ${{ env.FEATURE_TEST_BRANCH }} is ready for review."
           else
             gh pr ready --undo ${{ env.FEATURE_TEST_BRANCH }}
-            echo "Pull request of ${{ env.FEATURE_TEST_BRANCH }} is set to draft."
           fi
