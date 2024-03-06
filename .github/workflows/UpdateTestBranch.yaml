@@ -236,7 +236,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo
             })
-            const allComments = Promise.all([oldPrComments, newPrComments])
+            const allComments = await Promise.all([oldPrComments, newPrComments])
             allComments.forEach(comments => {
               comments.data.forEach(comment => {
                 if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ env.BOT_COMMENT_TAG }}')) {
