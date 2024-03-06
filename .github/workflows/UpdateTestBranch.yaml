@@ -24,13 +24,6 @@ jobs:
     name: Update Test Branch
     runs-on: ubuntu-latest
     steps:
-      - name: Ensure trigger label exists
-        run: |
-          if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
-            gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
-            echo "::notice::Label ${{ env.BOT_LABEL }} added to repository."
-          fi
-
       - name: Check PR status
         id: check_pr
         continue-on-error: true
@@ -56,6 +49,13 @@ jobs:
         run: |
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure trigger label exists
+        run: |
+          if [ -z "$(gh label list --search "${{ env.TRIGGER_LABEL }}" --limit 1)" ]; then
+            gh label create ${{ env.TRIGGER_LABEL }} --color 9ABE8F --description "This pull request is ready to be merged into the test branch."
+            echo "::notice::Label ${{ env.TRIGGER_LABEL }} added to repository."
+          fi
 
       - name: Check if ${{ env.TEST_BRANCH }} exists
         id: check_test_branch
