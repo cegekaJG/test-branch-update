@@ -36,9 +36,11 @@ jobs:
             if (context.payload.pull_request.head.ref.startsWith('${{ env.SKIP_TAG }}/')) {
               core.setFailed(`The head branch of this pull request begins with "${{ env.SKIP_TAG }}/". Changes from this branch will not be cherry-picked into the ${process.env.TEST_BRANCH} branch.`);
             }
-            if [ "${{ github.event.label.name }}" != "${{ env.TRIGGER_LABEL }}" ]; then
-              core.setFailed('The label "${{ github.event.label.name }}" is not the required label "${{ env.TRIGGER_LABEL }}".');
-            fi
+            const triggerLabel = "${{ env.TRIGGER_LABEL }}";
+            const eventLabel = github.event.label.name;
+            if (eventLabel !== triggerLabel) {
+              core.setFailed(`The label "${eventLabel}" is not the required label "${triggerLabel}".`);
+            }
 
       - name: Checkout repository
         if: ${{ steps.check_pr.outcome == 'success' }}
@@ -53,7 +55,7 @@ jobs:
       - name: Ensure trigger label exists
         run: |
           if [ -z "$(gh label list --search "${{ env.TRIGGER_LABEL }}" --limit 1)" ]; then
-            gh label create ${{ env.TRIGGER_LABEL }} --color 9ABE8F --description "This pull request is ready to be merged into the test branch."
+            gh label create ${{ env.TRIGGER_LABEL }} --color 9ABE8F --description "Ready to be added to the test branch."
             echo "::notice::Label ${{ env.TRIGGER_LABEL }} added to repository."
           fi
 
