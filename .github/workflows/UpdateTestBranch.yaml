@@ -13,7 +13,7 @@ env:
   CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
   FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
   BOT_COMMENT_TAG: <!-- Test -->
-  LABELS: Automated
+  LABEL: Automated
   SKIP_TAG: skip
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -200,7 +200,15 @@ jobs:
               '```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```.'
             })
 
-      - name: "Finally: Create/Update pull request"
+      - name: Ensure label exists
+        if: ${{ steps.check_pr.outcome == 'success' }}
+        run: |
+          if [ -z "$(gh label list --search ${{ env.LABEL }} --limit 1)" ]; then
+            gh label create ${{ env.LABEL }} --color 777777 -description "Automated pull requests"
+            echo "::notice::Label ${{ env.LABEL }} added to repository."
+          fi
+
+      - name: Create/Update pull request
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ env.FEATURE_TEST_BRANCH }} --state open | wc -l)" == 0 ]; then
@@ -208,16 +216,18 @@ jobs:
               --base ${{ env.TEST_BRANCH }} \
               --head ${{ env.FEATURE_TEST_BRANCH }} \
               --title "${{ github.event.pull_request.title}} - Test" \
-              --label ${{ env.LABELS }} \
+              --label ${{ env.LABEL }} \
               --assignee ${{ github.actor }} \
               --body "This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} to ${{ env.TEST_BRANCH }}.
               See #${{ github.event.pull_request.number }} for more details."
+            echo "::notice::Pull request of ${{ env.FEATURE_TEST_BRANCH }} created."
           else
             gh pr update ${{ env.FEATURE_TEST_BRANCH }} \
               --add-assignee ${{ github.actor }}
+            echo "::notice::Pull request of ${{ env.FEATURE_TEST_BRANCH }} updated."
           fi
 
-      - name: "Finally: Set pull request status"
+      - name: Set pull request status
         if: ${{ steps.check_pr.outcome == 'success' }}
         run: |
           if [ ${{ steps.merge_commit.outcome == 'success' }} ]; then
