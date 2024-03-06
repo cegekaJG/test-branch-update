@@ -245,7 +245,7 @@ jobs:
                     owner: context.repo.owner,
                     repo: context.repo.repo
                   })
-                  process.stdout.write(`Deleted comment ${comment.id}.\n`)
+                  process.stdout.write(`Deleted comment ${comment.id} from ${comment.url}.`)
                 }
               })
             })
@@ -253,23 +253,24 @@ jobs:
       - name: Comment on the new pull request
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body \
-            '${{ env.BOT_COMMENT_TAG }}
-            ${{ env.TEST_BRANCH }} update failed.
-            To manually resolve the merge conflicts, please follow these steps:
+          body="${{ env.BOT_COMMENT_TAG }}
+          ${{ env.TEST_BRANCH }} update failed.
+          To manually resolve the merge conflicts, please follow these steps:
 
-            1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:
-            ```git checkout ${{ env.FEATURE_TEST_BRANCH }}```
-            2) In a terminal with Git, enter the following command to start the cherry-pick:
+          1) Checkout the branch ${{ env.FEATURE_TEST_BRANCH }} with the following command:
+          ```git checkout ${{ env.FEATURE_TEST_BRANCH }}```
+          2) In a terminal with Git, enter the following command to start the cherry-pick:
 
-            ```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m \
-            "Cherry-pick changes from ${{ github.head_ref }} up to \
-            ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```
+          ```git cherry-pick ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} -m \
+          "Cherry-pick changes from ${{ github.head_ref }} up to \
+          ${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"```
 
-            3) Resolve the merge conflicts and push the changes.
-            4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
+          3) Resolve the merge conflicts and push the changes.
+          4) Delete the branch `${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}` with the following command:
 
-            ```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```'
+          ```git push origin --delete ${{ steps.create_temp_branch.outputs.CHERRY_PICK_BRANCH }}```"
+
+          gh pr comment ${{ steps.create_pr.outputs.TEST_PR_URL }} --body "$body"
 
       - name: Comment on the original pull request
         if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
@@ -285,4 +286,4 @@ jobs:
             A new pull request has been created to manually resolve the merge conflicts and test the changes.'
           fi
           body+='See ${{ steps.create_pr.outputs.TEST_PR_URL }} for more details.'
-          gh pr comment ${{ github.event.pull_request.url }} --body $body
+          gh pr comment ${{ github.event.pull_request.url }} --body "$body"
