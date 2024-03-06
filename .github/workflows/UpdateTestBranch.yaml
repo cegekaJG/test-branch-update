@@ -201,12 +201,12 @@ jobs:
               --label ${{ env.LABEL }} \
               --assignee ${{ github.actor }} \
               --body "This automated pull request adds the cherry-picked changes from ${{ github.head_ref }} to ${{ env.TEST_BRANCH }}.
-              See #${{ github.event.pull_request.number }} for more details."
-            echo "::notice::$TEST_PR_URL created.")
+              See #${{ github.event.pull_request.number }} for more details.")
+            echo "::notice::$TEST_PR_URL created."
           else
             TEST_PR_URL=$(gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
-              --add-assignee ${{ github.actor }}
-            echo "::notice::$TEST_PR_URL updated.")
+              --add-assignee ${{ github.actor }})
+            echo "::notice::$TEST_PR_URL updated."
           fi
           echo "TEST_PR_URL=$TEST_PR_URL" >> "$GITHUB_OUTPUT"
 
