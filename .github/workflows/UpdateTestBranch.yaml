@@ -36,11 +36,6 @@ jobs:
             if (context.payload.pull_request.head.ref.startsWith('${{ env.SKIP_TAG }}/')) {
               core.setFailed(`The head branch of this pull request begins with "${{ env.SKIP_TAG }}/". Changes from this branch will not be cherry-picked into the ${process.env.TEST_BRANCH} branch.`);
             }
-            const triggerLabel = "${{ env.TRIGGER_LABEL }}";
-            const eventLabel = context.payload.label.name;
-            if (eventLabel !== triggerLabel) {
-              core.setFailed(`The label "${eventLabel}" is not the required label "${triggerLabel}".`);
-            }
 
       - name: Checkout repository
         if: ${{ steps.check_pr.outcome == 'success' }}
