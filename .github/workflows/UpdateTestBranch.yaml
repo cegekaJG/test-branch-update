@@ -3,17 +3,18 @@ name: Update Test Branch
 on:
   pull_request:
     types:
-      - opened
-      - synchronize
+      labeled
     branches:
+      - master
       - main
 
 env:
   TEST_BRANCH: testmaster
   CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
   FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
+  TRIGGER_LABEL: Ready for Test
   BOT_COMMENT_TAG: <!-- Test -->
-  LABEL: Automated
+  BOT_LABEL: Automated
   SKIP_TAG: skip
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   DISABLE_COMMENTS: false
@@ -29,9 +30,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            if (context.payload.pull_request.draft) {
-              core.setFailed('This pull request is a draft. Update workflow cancelled.');
-            }
             if (context.payload.pull_request.head.ref === process.env.TEST_BRANCH) {
               core.setFailed(`You cannot update the ${process.env.TEST_BRANCH} branch with itself. Please use a different branch.`);
             }
@@ -49,9 +47,29 @@ jobs:
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Ensure trigger label exists
+        if: ${{ steps.check_pr.outcome == 'success' }}
+        run: |
+          if [ -z "$(gh label list --search "${{ env.TRIGGER_LABEL }}" --limit 1)" ]; then
+            gh label create ${{ env.TRIGGER_LABEL }} --color fa8825 --description "Ready to be added to the test branch."
+            echo "::notice::Label ${{ env.TRIGGER_LABEL }} added to repository."
+          fi
+
+      - name: Check if label matches trigger label
+        id: check_label
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const triggerLabel = "${{ env.TRIGGER_LABEL }}";
+            const eventLabel = context.payload.label.name;
+            if (eventLabel !== triggerLabel) {
+              core.setFailed(`The label "${eventLabel}" is not the required label "${triggerLabel}".`);
+            }
+
       - name: Check if ${{ env.TEST_BRANCH }} exists
         id: check_test_branch
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -64,7 +82,7 @@ jobs:
 
       - name: Get newest commit hash
         id: get_commit_hash
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
           newest_commit_hash=$(git rev-parse --short HEAD)
           echo "NEWEST_COMMIT_HASH=$newest_commit_hash" >> "$GITHUB_OUTPUT"
@@ -72,7 +90,7 @@ jobs:
 
       - name: Create temporary cherry-pick branch of target branch
         id: create_temp_branch
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
           cherry_pick_branch="${{ env.CPICK_BRANCH_TEMPLATE }}/${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}"
           echo "CHERRY_PICK_BRANCH=$cherry_pick_branch" >> "$GITHUB_OUTPUT"
@@ -83,7 +101,7 @@ jobs:
       - name: Squash merge ${{ github.head_ref }} into temporary cherry-pick branch
         id: merge_commit
         continue-on-error: true
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
           git fetch origin ${{ github.head_ref }}
           merge_commit_msg='Cherry-pick changes from `${{ github.head_ref }}` up to `${{ steps.get_commit_hash.outputs.NEWEST_COMMIT_HASH }}`'
@@ -99,14 +117,14 @@ jobs:
           echo "MERGE_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Report Error
-        if: ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA == '' }}
+        if: ${{ steps.check_label.outcome == 'success' && steps.merge_commit.outputs.MERGE_COMMIT_SHA == '' }}
         uses: actions/github-script@v7
         with:
           script:
             core.setFailed('Unable to create squash merge commit. Please merge the latest changes to `${{ github.base_ref }}` into the head branch `${{ github.head_ref }}` and try again.')
 
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
           git fetch origin ${{ env.TEST_BRANCH }}
           if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
@@ -121,7 +139,7 @@ jobs:
       - name: Cherry-pick squash merge commit
         continue-on-error: true
         id: cherry_pick
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
           git cherry-pick --no-commit ${{ steps.merge_commit.outputs.MERGE_COMMIT_SHA }} || true
           git status --porcelain | grep '^U'
@@ -157,24 +175,24 @@ jobs:
           Manual resolution required.'
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
-      - name: Ensure label exists
-        if: ${{ steps.check_pr.outcome == 'success' }}
+      - name: Ensure bot label exists
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
-          if [ -z "$(gh label list --search ${{ env.LABEL }} --limit 1)" ]; then
-            gh label create ${{ env.LABEL }} --color AAAAAA --description "Automated pull requests"
-            echo "::notice::Label ${{ env.LABEL }} added to repository."
+          if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
+            gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
+            echo "::notice::Label ${{ env.BOT_LABEL }} added to repository."
           fi
 
       - name: Create/Update pull request
         id: create_pr
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
           if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ env.FEATURE_TEST_BRANCH }} --state open | wc -l)" == 0 ]; then
             TEST_PR_URL=$(gh pr create \
               --base ${{ env.TEST_BRANCH }} \
               --head ${{ env.FEATURE_TEST_BRANCH }} \
               --title "${{ github.event.pull_request.title }} - Test" \
-              --label ${{ env.LABEL }} \
+              --label ${{ env.BOT_LABEL }} \
               --assignee ${{ github.actor }} \
               --body 'This automated pull request adds the cherry-picked changes from `${{ github.head_ref }}` to `${{ env.TEST_BRANCH }}`.
               See #${{ github.event.pull_request.number }} for more details.')
@@ -187,7 +205,7 @@ jobs:
           echo "TEST_PR_URL=$TEST_PR_URL" >> "$GITHUB_OUTPUT"
 
       - name: Set pull request status
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         run: |
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             gh pr ready ${{ env.FEATURE_TEST_BRANCH }}
@@ -196,7 +214,7 @@ jobs:
           fi
 
       - name: Clean up comments
-        if: ${{ steps.check_pr.outcome == 'success' }}
+        if: ${{ steps.check_label.outcome == 'success' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -228,7 +246,7 @@ jobs:
 
       - name: Comment on the new pull request
         id: comment_new_pr
-        if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
+        if: ${{ steps.check_label.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
 
@@ -254,7 +272,7 @@ jobs:
           echo "COMMENT_URL=$COMMENT_URL" >> "$GITHUB_OUTPUT"
 
       - name: Comment on the original pull request
-        if: ${{ steps.check_pr.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
+        if: ${{ steps.check_label.outcome == 'success' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body='The cherry-picked changes from `${{ github.head_ref }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
@@ -267,3 +285,8 @@ jobs:
           fi
           gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}
           $body"
+
+      - name: Remove label from original pull request
+        if: ${{ steps.check_label.outcome == 'success' }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --remove-label "${{ env.TRIGGER_LABEL }}"
