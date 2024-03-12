@@ -60,6 +60,7 @@ jobs:
           eventLabel="${{ github.event.label.name }}"
           if [ "$eventLabel" != "$triggerLabel" ]; then
             echo "SKIP=true" >> "$GITHUB_ENV"
+            echo "::notice::Label $eventLabel does not match trigger label $triggerLabel. Skipping update."
           fi
 
       - name: Check if ${{ env.TEST_BRANCH }} exists
