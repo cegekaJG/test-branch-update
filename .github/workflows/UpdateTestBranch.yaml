@@ -1,0 +1,287 @@
+name: Update Test Branch
+
+on:
+  pull_request:
+    types:
+      labeled
+    branches:
+      - master
+      - main
+
+env:
+  TEST_BRANCH: testmaster
+  CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
+  FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
+  TRIGGER_LABEL: Ready for Test
+  BOT_COMMENT_TAG: <!-- Test -->
+  BOT_LABEL: Automated
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  DISABLE_COMMENTS: false
+  SKIP: false
+  NEWEST_COMMIT_HASH: ''
+  CHERRY_PICK_BRANCH: ''
+  MERGE_COMMIT_SHA: ''
+  MERGE_COMMIT_MSG: ''
+  TEST_PR_URL: ''
+  COMMENT_URL: ''
+
+jobs:
+  update_test_branch:
+    name: Update Test Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR status
+        id: check_pr
+        run: |
+          if [ "${{ github.head_ref }}" == "${{ env.TEST_BRANCH }}" ]; then
+            echo "::error::You cannot update the test branch `${{ env.TEST_BRANCH }}` with itself. Please use a different branch."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+
+      - name: Set up Git
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure trigger label exists
+        run: |
+          if [ -z "$(gh label list --search "${{ env.TRIGGER_LABEL }}" --limit 1)" ]; then
+            gh label create ${{ env.TRIGGER_LABEL }} --color fa8825 --description "Ready to be added to the test branch."
+            echo "::notice::Label ${{ env.TRIGGER_LABEL }} added to repository."
+          fi
+
+      - name: Check if label matches trigger label
+        id: check_label
+        run: |
+          triggerLabel="${{ env.TRIGGER_LABEL }}"
+          eventLabel="${{ github.event.label.name }}"
+          if [ "$eventLabel" != "$triggerLabel" ]; then
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Check if ${{ env.TEST_BRANCH }} exists
+        id: check_test_branch
+        if: ${{ env.SKIP == 'false' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            try {
+              execSync(`git fetch origin ${process.env.TEST_BRANCH}`);
+            } catch (error) {
+              core.setFailed(`Branch ${process.env.TEST_BRANCH} does not exist. Please create the branch and try again.`);
+            }
+
+      - name: Get newest commit hash
+        id: get_commit_hash
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          newest_commit_hash=$(git rev-parse --short HEAD)
+          echo "NEWEST_COMMIT_HASH=$newest_commit_hash" >> "$GITHUB_ENV"
+          echo "Newest commit hash (short): $newest_commit_hash"
+
+      - name: Create temporary cherry-pick branch of target branch
+        id: create_temp_branch
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          cherry_pick_branch="${{ env.CPICK_BRANCH_TEMPLATE }}/${{ env.NEWEST_COMMIT_HASH }}"
+          echo "CHERRY_PICK_BRANCH=$cherry_pick_branch" >> "$GITHUB_ENV"
+          git fetch origin ${{ github.base_ref }}
+          git checkout ${{ github.base_ref }}
+          git checkout -b $cherry_pick_branch
+
+      - name: Squash merge ${{ github.head_ref }} into temporary cherry-pick branch
+        id: merge_commit
+        continue-on-error: true
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          git fetch origin ${{ github.head_ref }}
+          merge_commit_msg='Cherry-pick changes from `${{ github.head_ref }}` up to `${{ env.NEWEST_COMMIT_HASH }}`'
+
+          git merge --squash -n "origin/${{ github.head_ref }}"
+          if [ -n "$(git status --porcelain | grep '^U')" ]; then
+            exit 1
+          fi
+          git commit -m "$merge_commit_msg"
+          git push origin "${{ env.CHERRY_PICK_BRANCH }}"
+
+          echo "MERGE_COMMIT_MSG=$merge_commit_msg" >> "$GITHUB_ENV"
+          echo "MERGE_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Report Error
+        if: ${{ env.SKIP == 'false' && env.MERGE_COMMIT_SHA == '' }}
+        uses: actions/github-script@v7
+        with:
+          script:
+            core.setFailed('Unable to create squash merge commit. Please merge the latest changes to `${{ github.base_ref }}` into the head branch `${{ github.head_ref }}` and try again.')
+
+      - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          git fetch origin ${{ env.TEST_BRANCH }}
+          if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
+            git checkout ${{ env.TEST_BRANCH }}
+            git checkout -b ${{ env.FEATURE_TEST_BRANCH }}
+            git push origin ${{ env.FEATURE_TEST_BRANCH }}
+          else
+            git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
+            git checkout ${{ env.FEATURE_TEST_BRANCH }}
+          fi
+
+      - name: Cherry-pick squash merge commit
+        continue-on-error: true
+        id: cherry_pick
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          git cherry-pick --no-commit ${{ env.MERGE_COMMIT_SHA }} || true
+          git status --porcelain | grep '^U'
+          if [ -n "$(git status --porcelain | grep '^U')" ]; then
+            echo '::error::Cherry-pick failed. Please cherry-pick the commit "${{ env.MERGE_COMMIT_MSG }}" (`${{ env.MERGE_COMMIT_SHA }}`) into `${{ env.FEATURE_TEST_BRANCH }}` manually.'
+            exit 1
+          else
+            echo "Cherry-pick successful."
+          fi
+
+      - name: "On success: Commit & push cherry-picked changes"
+        if: ${{ steps.cherry_pick.outcome == 'success' }}
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m '${{ env.MERGE_COMMIT_MSG }}'
+          fi
+          if [ -z "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+            git push origin ${{ env.FEATURE_TEST_BRANCH }}
+          fi
+
+      - name: "On success: Cleanup cherry-pick branch"
+        if: ${{ steps.cherry_pick.outcome == 'success' }}
+        run: |
+          git branch -D ${{ env.CHERRY_PICK_BRANCH }}
+          git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
+          git branch | grep '${{ env.CPICK_BRANCH_TEMPLATE }}' | xargs -I {} git push origin --delete {}
+
+      - name: "On failure: Abort cherry-pick & add empty commit"
+        if: ${{ steps.cherry_pick.outcome == 'failure' }}
+        run: |
+          git reset --hard
+          git commit --allow-empty -m 'Cherry-pick of `${{ env.CHERRY_PICK_BRANCH }}` failed.
+          Manual resolution required.'
+          git push origin ${{ env.FEATURE_TEST_BRANCH }}
+
+      - name: Ensure bot label exists
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
+            gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
+            echo "::notice::Label ${{ env.BOT_LABEL }} added to repository."
+          fi
+
+      - name: Create/Update pull request
+        id: create_pr
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ env.FEATURE_TEST_BRANCH }} --state open | wc -l)" == 0 ]; then
+            TEST_PR_URL=$(gh pr create \
+              --base ${{ env.TEST_BRANCH }} \
+              --head ${{ env.FEATURE_TEST_BRANCH }} \
+              --title "${{ github.event.pull_request.title }} - Test" \
+              --label ${{ env.BOT_LABEL }} \
+              --assignee ${{ github.actor }} \
+              --body 'This automated pull request adds the cherry-picked changes from `${{ github.head_ref }}` to `${{ env.TEST_BRANCH }}`.
+              See #${{ github.event.pull_request.number }} for more details.')
+            echo "::notice::$TEST_PR_URL created."
+          else
+            TEST_PR_URL=$(gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
+              --add-assignee ${{ github.actor }})
+            echo "::notice::$TEST_PR_URL updated."
+          fi
+          echo "TEST_PR_URL=$TEST_PR_URL" >> "$GITHUB_ENV"
+
+      - name: Set pull request status
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
+            gh pr ready ${{ env.FEATURE_TEST_BRANCH }}
+          else
+            gh pr ready --undo ${{ env.FEATURE_TEST_BRANCH }}
+          fi
+
+      - name: Clean up comments
+        if: ${{ env.SKIP == 'false' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const urlSubstrings = "${{ env.TEST_PR_URL }}".split('/')
+            const newPrNumber = urlSubstrings[urlSubstrings.length - 1]
+            const oldPrComments = github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            })
+            const newPrComments = github.rest.issues.listComments({
+              issue_number: newPrNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            })
+            const allComments = await Promise.all([oldPrComments, newPrComments])
+            allComments.forEach(comments => {
+              comments.data.forEach(comment => {
+                if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ env.BOT_COMMENT_TAG }}')) {
+                  github.rest.issues.deleteComment({
+                    comment_id: comment.id,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo
+                  })
+                  process.stdout.write(`Deleted comment ${comment.html_url}.\n`)
+                }
+              })
+            })
+
+      - name: Comment on the new pull request
+        id: comment_new_pr
+        if: ${{ env.SKIP == 'false' && env.DISABLE_COMMENTS == 'false' }}
+        run: |
+          body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
+
+          To manually resolve the merge conflicts, please follow these steps:
+
+          1) Checkout the latest version of the branch `${{ env.FEATURE_TEST_BRANCH }}` with the following commands:
+          ```
+          git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
+          git checkout ${{ env.FEATURE_TEST_BRANCH }}
+          git pull origin ${{ env.FEATURE_TEST_BRANCH }}
+          git cherry-pick ${{ env.MERGE_COMMIT_SHA }} -e
+          ```
+          2) Resolve the merge conflicts and push the changes.
+          3) Delete the branch `${{ env.CHERRY_PICK_BRANCH }}` with the following command:
+          ```
+          git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
+          ```
+          4) Mark the pull request as ready for review to trigger the status checks.'
+
+          COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}
+          $body")
+          echo $COMMENT_URL
+          echo "COMMENT_URL=$COMMENT_URL" >> "$GITHUB_ENV"
+
+      - name: Comment on the original pull request
+        if: ${{ env.SKIP == 'false' && env.DISABLE_COMMENTS == 'false' }}
+        run: |
+          if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
+            body='The cherry-picked changes from `${{ github.head_ref }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
+
+            A new pull request has been created to test the changes. See ${{ env.COMMENT_URL }} for more details.'
+          else
+            body='Unable to cherry-pick the changes from `${{ github.head_ref }}` to the `${{ env.TEST_BRANCH }}` branch.
+
+            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ env.COMMENT_URL }} for more details.'
+          fi
+          gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.BOT_COMMENT_TAG }}
+          $body"
+
+      - name: Remove label from original pull request
+        if: ${{ env.SKIP == 'false' }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --remove-label "${{ env.TRIGGER_LABEL }}"
