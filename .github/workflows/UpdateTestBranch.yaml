@@ -13,13 +13,16 @@ env:
   CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
   FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
   TRIGGER_LABEL: Ready for Test
-  BOT_COMMENT_TAG: <!-- Test -->
+  BOT_COMMENT_TAG: <!-- UpdateTestBranch/NOTICE -->
+  COMMIT_COMMENT_TAG: <!-- UpdateTestBranch/COMMIT -->
   BOT_LABEL: Automated
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   DISABLE_COMMENTS: false
-  SKIP: false
+  SKIP_ALL: false
+  FEATURE_COMMITS: ''
+  PICKED_COMMITS: ''
+  ADDED_COMMITS: ''
   NEWEST_COMMIT_HASH: ''
-  CHERRY_PICK_BRANCH: ''
   MERGE_COMMIT_SHA: ''
   MERGE_COMMIT_MSG: ''
   TEST_PR_URL: ''
@@ -31,7 +34,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check PR status
-        id: check_pr
         run: |
           if [ "${{ github.head_ref }}" == "${{ env.TEST_BRANCH }}" ]; then
             echo "::error::You cannot update the test branch `${{ env.TEST_BRANCH }}` with itself. Please use a different branch."
@@ -54,7 +56,6 @@ jobs:
           fi
 
       - name: Check if label matches trigger label
-        id: check_label
         run: |
           triggerLabel="${{ env.TRIGGER_LABEL }}"
           eventLabel="${{ github.event.label.name }}"
@@ -64,8 +65,7 @@ jobs:
           fi
 
       - name: Check if ${{ env.TEST_BRANCH }} exists
-        id: check_test_branch
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -77,50 +77,84 @@ jobs:
             }
 
       - name: Get newest commit hash
-        id: get_commit_hash
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           newest_commit_hash=$(git rev-parse --short HEAD)
           echo "NEWEST_COMMIT_HASH=$newest_commit_hash" >> "$GITHUB_ENV"
           echo "Newest commit hash (short): $newest_commit_hash"
 
-      - name: Create temporary cherry-pick branch of target branch
-        id: create_temp_branch
-        if: ${{ env.SKIP == 'false' }}
+      - name: Get list of new commits
+        id: get_feature_commits
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          cherry_pick_branch="${{ env.CPICK_BRANCH_TEMPLATE }}/${{ env.NEWEST_COMMIT_HASH }}"
-          echo "CHERRY_PICK_BRANCH=$cherry_pick_branch" >> "$GITHUB_ENV"
-          git fetch origin ${{ github.base_ref }}
-          git checkout ${{ github.base_ref }}
-          git checkout -b $cherry_pick_branch
+          feature_commits=$(git log --pretty=format:%h --no-merges origin/${{ github.base_ref }}..${{ github.head_ref }})
+          feature_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ github.base_ref }}..${{ github.head_ref }})
+          echo "FEATURE_COMMITS=$feature_commits" >> "$GITHUB_ENV"
+          echo "New commits: $feature_commits_pretty"
 
-      - name: Squash merge ${{ github.head_ref }} into temporary cherry-pick branch
-        id: merge_commit
-        continue-on-error: true
-        if: ${{ env.SKIP == 'false' }}
-        run: |
-          git fetch origin ${{ github.head_ref }}
-          merge_commit_msg='Cherry-pick changes from `${{ github.head_ref }}` up to `${{ env.NEWEST_COMMIT_HASH }}`'
-
-          git merge --squash -n "origin/${{ github.head_ref }}"
-          if [ -n "$(git status --porcelain | grep '^U')" ]; then
-            exit 1
+      - name: Check if ${{ env.FEATURE_TEST_BRANCH }} exists
+        id: check_feature_test_branch
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run:
+          if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
+            echo "SKIP_CHERRY_LIST=true" >> "$GITHUB_ENV"
+          else
+            echo "SKIP_CHERRY_LIST=false" >> "$GITHUB_ENV"
           fi
-          git commit -m "$merge_commit_msg"
-          git push origin "${{ env.CHERRY_PICK_BRANCH }}"
 
-          echo "MERGE_COMMIT_MSG=$merge_commit_msg" >> "$GITHUB_ENV"
-          echo "MERGE_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Get list of already cherry-picked commits
+        id: get_cherry_picked_commits
+        if: ${{ env.SKIP_ALL == 'false' && steps.check_feature_test_branch.outputs.SKIP_CHERRY_LIST == 'false' }}
+        run: |
+          git fetch origin ${{ env.TEST_BRANCH }}
+          git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
+          picked_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.TEST_BRANCH }})
+          picked_commits_pretty=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.TEST_BRANCH }})
+          echo "PICKED_COMMITS=$picked_commits" >> "$GITHUB_ENV"
+          echo "Cherry-picked commits: $picked_commits_pretty"
 
-      - name: Report Error
-        if: ${{ env.SKIP == 'false' && env.MERGE_COMMIT_SHA == '' }}
+      - name: Get list of already added commits from PR comments
+        id: get_added_commits
+        if: ${{ env.SKIP_ALL == 'false' }}
         uses: actions/github-script@v7
         with:
-          script:
-            core.setFailed('Unable to create squash merge commit. Please merge the latest changes to `${{ github.base_ref }}` into the head branch `${{ github.head_ref }}` and try again.')
+          script: |
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            })
+            const addedCommits = comments.data
+              .filter(comment => comment.body.startsWith('<!-- UpdateTestBranch/COMMIT -->'))
+              .flatMap(comment => {
+                const lines = comment.body.split('\n');
+                const commitLines = lines.slice(3);
+                process.stdout.write(`${JSON.stringify(commitLines)}\n`);
+                return commitLines.map(line => line.slice(2));
+              });
+            core.setOutput('ADDED_COMMITS', JSON.stringify(addedCommits))
+
+      - name: Exclude commits that have already been cherry-picked
+        if: ${{ env.SKIP_ALL == 'false' && steps.check_feature_test_branch.outputs.SKIP_CHERRY_LIST == 'false' }}
+        run: |
+          feature_commits=(${{ env.FEATURE_COMMITS }})
+          picked_commits=(${{ env.PICKED_COMMITS }})
+          added_commits=(${{ env.ADDED_COMMITS }})
+          echo "Feature commits: ${feature_commits[*]}"
+          echo "Picked commits: ${picked_commits[*]}"
+          echo "Added commits: ${added_commits[*]}"
+          new_commits=()
+          for commit in "${feature_commits[@]}"; do
+            if [[ ! " ${picked_commits[@]} " =~ " $commit " ]] && [[ ! " ${added_commits[@]} " =~ " $commit " ]]; then
+              new_commits+=($commit)
+            fi
+          done
+          IFS=' '
+          echo "FEATURE_COMMITS=${new_commits[*]}" >> "$GITHUB_ENV"
+          echo "New commits: ${new_commits[*]}"
 
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           git fetch origin ${{ env.TEST_BRANCH }}
           if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
@@ -132,12 +166,14 @@ jobs:
             git checkout ${{ env.FEATURE_TEST_BRANCH }}
           fi
 
-      - name: Cherry-pick squash merge commit
+      - name: Cherry-pick new commits
         continue-on-error: true
         id: cherry_pick
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          git cherry-pick --no-commit ${{ env.MERGE_COMMIT_SHA }} || true
+          echo "Cherry-picking the following commits:"
+          echo "${{ env.FEATURE_COMMITS }}"
+          git cherry-pick --no-commit ${{ env.FEATURE_COMMITS }} || true
           git status --porcelain | grep '^U'
           if [ -n "$(git status --porcelain | grep '^U')" ]; then
             echo '::error::Cherry-pick failed. Please cherry-pick the commit "${{ env.MERGE_COMMIT_MSG }}" (`${{ env.MERGE_COMMIT_SHA }}`) into `${{ env.FEATURE_TEST_BRANCH }}` manually.'
@@ -156,23 +192,27 @@ jobs:
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           fi
 
-      - name: "On success: Cleanup cherry-pick branch"
-        if: ${{ steps.cherry_pick.outcome == 'success' }}
+      - name: "On failure: Get list of newly cherry-picked commits"
+        if: ${{ steps.cherry_pick.outcome == 'failure' }}
         run: |
-          git branch -D ${{ env.CHERRY_PICK_BRANCH }}
-          git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
-          git branch | grep '${{ env.CPICK_BRANCH_TEMPLATE }}' | xargs -I {} git push origin --delete {}
+          successful_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
+          successful_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
+          echo "PICKED_COMMITS=$successful_commits" >> "$GITHUB_ENV"
+          echo "Successful cherry-picks: $successful_commits_pretty"
 
-      - name: "On failure: Abort cherry-pick & add empty commit"
+      - name: "On failure: Abort cherry-pick & push changes"
         if: ${{ steps.cherry_pick.outcome == 'failure' }}
         run: |
           git reset --hard
-          git commit --allow-empty -m 'Cherry-pick of `${{ env.CHERRY_PICK_BRANCH }}` failed.
-          Manual resolution required.'
+          if [ -n "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+            echo "Pushing empty commit to ${{ env.FEATURE_TEST_BRANCH }} to create PR."
+            git commit --allow-empty -m 'Cherry-pick of `${{ github.head_ref }}` failed.
+            Manual resolution required.'
+          fi
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
       - name: Ensure bot label exists
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
             gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
@@ -180,8 +220,7 @@ jobs:
           fi
 
       - name: Create/Update pull request
-        id: create_pr
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ env.FEATURE_TEST_BRANCH }} --state open | wc -l)" == 0 ]; then
             TEST_PR_URL=$(gh pr create \
@@ -201,7 +240,7 @@ jobs:
           echo "TEST_PR_URL=$TEST_PR_URL" >> "$GITHUB_ENV"
 
       - name: Set pull request status
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             gh pr ready ${{ env.FEATURE_TEST_BRANCH }}
@@ -210,7 +249,7 @@ jobs:
           fi
 
       - name: Clean up comments
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -241,8 +280,7 @@ jobs:
             })
 
       - name: Comment on the new pull request
-        id: comment_new_pr
-        if: ${{ env.SKIP == 'false' && env.DISABLE_COMMENTS == 'false' }}
+        if: ${{ steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
 
@@ -256,11 +294,7 @@ jobs:
           git cherry-pick ${{ env.MERGE_COMMIT_SHA }} -e
           ```
           2) Resolve the merge conflicts and push the changes.
-          3) Delete the branch `${{ env.CHERRY_PICK_BRANCH }}` with the following command:
-          ```
-          git push origin --delete ${{ env.CHERRY_PICK_BRANCH }}
-          ```
-          4) Mark the pull request as ready for review to trigger the status checks.'
+          3) Mark the pull request as ready for review to trigger the status checks.'
 
           COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body "${{ env.BOT_COMMENT_TAG }}
           $body")
@@ -268,8 +302,18 @@ jobs:
           echo "COMMENT_URL=$COMMENT_URL" >> "$GITHUB_ENV"
 
       - name: Comment on the original pull request
-        if: ${{ env.SKIP == 'false' && env.DISABLE_COMMENTS == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' && env.DISABLE_COMMENTS == 'false' }}
         run: |
+          if [ -n "${{ env.FEATURE_COMMITS }}" ]; then
+            body='Cherry-picked the following commits from `${{ github.head_ref }}` to `${{ env.FEATURE_TEST_BRANCH }}`:
+
+            ```
+            ${{ env.FEATURE_COMMITS }}
+            ```'
+            gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.COMMIT_COMMENT_TAG }}
+            $body"
+          fi
+
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body='The cherry-picked changes from `${{ github.head_ref }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
 
@@ -283,6 +327,6 @@ jobs:
           $body"
 
       - name: Remove label from original pull request
-        if: ${{ env.SKIP == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           gh pr edit ${{ github.event.pull_request.number }} --remove-label "${{ env.TRIGGER_LABEL }}"
