@@ -17,7 +17,6 @@ env:
   COMMIT_COMMENT_TAG: <!-- UpdateTestBranch/COMMIT -->
   BOT_LABEL: Automated
   DISABLE_COMMENTS: false
-  DEBUG: false
   SKIP_ALL: false
   LABEL_MATCH: false
   FEATURE_COMMITS: ''
@@ -44,12 +43,6 @@ jobs:
           echo "COMMIT_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_COMMIT_COMMENT_TAG || env.COMMIT_COMMENT_TAG }}" >> $GITHUB_ENV
           echo "BOT_LABEL=${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}" >> $GITHUB_ENV
           echo "DISABLE_COMMENTS=${{ vars.UPDATETESTBRANCH_DISABLE_COMMENTS || env.DISABLE_COMMENTS }}" >> $GITHUB_ENV
-          echo "DEBUG=${{ vars.UPDATETESTBRANCH_DEBUG || env.DEBUG }}" >> $GITHUB_ENV
-
-      - name: Enable debug mode
-        if: ${{ env.DEBUG == 'true' }}
-        run: |
-          set -x
 
       - name: Check if label matches trigger label
         run: |
