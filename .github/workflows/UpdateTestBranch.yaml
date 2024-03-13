@@ -82,7 +82,7 @@ jobs:
           git fetch origin ${{ github.base_ref }}
           git fetch origin ${{ github.head_ref }}
           feature_commits=$(git log --pretty=format:%h --no-merges origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
-          feature_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
+          feature_commits_pretty=$(git log --pretty=format:"- %s (%H)" --no-merges origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
           echo "Feature commits: $feature_commits_pretty"
           echo "::debug::$feature_commits"
           echo "FEATURE_COMMITS=$feature_commits" >> $GITHUB_ENV
@@ -108,7 +108,7 @@ jobs:
           git fetch origin ${{ env.TEST_BRANCH }}
           git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
           picked_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
-          picked_commits_pretty=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
+          picked_commits_pretty=$(git log --pretty=format:"- %s %H" --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
           echo "Cherry-picked commits: $picked_commits_pretty"
           echo "::debug::$picked_commits"
           echo "PICKED_COMMITS=$picked_commits" >> $GITHUB_ENV
@@ -192,8 +192,9 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           successful_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
-          successful_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
-          echo "Successful cherry-picks: $successful_commits_pretty"
+          successful_commits_pretty=$(git log --pretty=format:"- %s (%H)" --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
+          echo "Successful cherry-picks:
+          $successful_commits_pretty"
           echo "::debug::$successful_commits"
           echo "PICKED_COMMITS=$successful_commits" >> $GITHUB_ENV
 
@@ -212,8 +213,10 @@ jobs:
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
-          echo "Feature commits: ${feature_commits[*]}"
-          echo "Picked commits: ${picked_commits[*]}"
+          echo "Feature commits:
+          ${feature_commits[*]}"
+          echo "Picked commits:
+          ${picked_commits[*]}"
           missing_commits=()
           for commit in "${feature_commits[@]}"; do
             if [[ ! " ${picked_commits[@]} " =~ " $commit " ]] ; then
@@ -221,7 +224,8 @@ jobs:
             fi
           done
           IFS=' '
-          echo "Missing commits: ${missing_commits[*]}"
+          echo "Missing commits:
+          ${missing_commits[*]}"
           echo "MISSING_COMMITS=${missing_commits[*]}" >> $GITHUB_ENV
 
       - name: "On failure: Abort cherry-pick & push changes"
