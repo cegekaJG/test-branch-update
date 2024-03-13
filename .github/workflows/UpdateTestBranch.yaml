@@ -37,11 +37,13 @@ jobs:
         run: |
           triggerLabel="${{ env.TRIGGER_LABEL }}"
           eventLabel="${{ github.event.label.name }}"
+
           if [ "$eventLabel" != "$triggerLabel" ]; then
-            echo "SKIP=true" >> $GITHUB_ENV
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::Label $eventLabel does not match trigger label $triggerLabel. Skipping update."
+          else
+            echo "LABEL_MATCH=true" >> $GITHUB_ENV
           fi
-          echo "LABEL_MATCH=true" >> $GITHUB_ENV
 
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -353,7 +355,7 @@ jobs:
     name: Remove trigger label
     runs-on: ubuntu-latest
     needs: update_test_branch
-    if: ${{ needs.update_test_branch.outputs.LABEL_MATCH == 'true' }}
+    if: ${{ always() && needs.update_test_branch.outputs.LABEL_MATCH == 'true' }}
     steps:
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
