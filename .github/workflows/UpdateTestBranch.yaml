@@ -90,13 +90,16 @@ jobs:
             echo "::debug::$commit"
           done
 
-          echo "FEATURE_COMMITS<<EOF" >> $GITHUB_ENV
-          echo "$feature_commits" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
           if [ -z "$feature_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits found. Skipping update."
           fi
+
+          {
+            echo "FEATURE_COMMITS<<EOF"
+            echo "$feature_commits"
+            echo "EOF"
+          } >> $GITHUB_ENV
 
       - name: Check if ${{ env.FEATURE_TEST_BRANCH }} exists
         id: check_feature_test_branch
@@ -123,7 +126,11 @@ jobs:
             echo "::debug::$commit"
           done
 
-          echo "PICKED_COMMITS=$picked_commits" >> $GITHUB_ENV
+          {
+            echo "PICKED_COMMITS<<EOF"
+            echo "$picked_commits"
+            echo "EOF"
+          } >> $GITHUB_ENV
 
       - name: Get list of already added commits from PR comments
         id: get_added_commits
@@ -152,9 +159,11 @@ jobs:
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
           added_commits=(${{ env.ADDED_COMMITS }})
+
           echo "Feature commits: ${feature_commits[*]}"
           echo "Picked commits: ${picked_commits[*]}"
           echo "Added commits: ${added_commits[*]}"
+
           new_commits=()
           for commit in "${feature_commits[@]}"; do
             if [[ ! " ${picked_commits[@]} " =~ " $commit " ]] && [[ ! " ${added_commits[@]} " =~ " $commit " ]]; then
@@ -167,8 +176,13 @@ jobs:
           else
             echo "New commits:
             ${new_commits[*]}"
-            echo "FEATURE_COMMITS=${new_commits[*]}" >> $GITHUB_ENV
           fi
+
+          {
+            echo "FEATURE_COMMITS<<EOF"
+            echo "${new_commits[*]}"
+            echo "EOF"
+          } >> $GITHUB_ENV
 
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -211,7 +225,11 @@ jobs:
             echo "::debug::$commit"
           done
 
-          echo "PICKED_COMMITS=$successful_commits" >> $GITHUB_ENV
+          {
+            echo "PICKED_COMMITS<<EOF"
+            echo "$successful_commits"
+            echo "EOF"
+          } >> $GITHUB_ENV
 
       - name: "On success: Commit & push cherry-picked changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'success' }}
@@ -240,7 +258,12 @@ jobs:
           done
           echo "Missing commits:
           ${missing_commits[*]}"
-          echo "MISSING_COMMITS=${missing_commits[*]}" >> $GITHUB_ENV
+
+          {
+            echo "MISSING_COMMITS<<EOF"
+            echo "${missing_commits[*]}"
+            echo "EOF"
+          } >> $GITHUB_ENV
 
       - name: "On failure: Abort cherry-pick & push changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
@@ -257,7 +280,7 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
-            gh label create ${{ env.BOT_LABEL }} --color AAAAAA --description "Automated pull requests"
+            gh label create ${{ env.BOT_LABEL }} --color CCCCCC --description "Automated pull requests"
             echo "::notice::Label ${{ env.BOT_LABEL }} added to repository."
           fi
 
