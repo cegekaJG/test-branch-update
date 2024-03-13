@@ -30,13 +30,6 @@ jobs:
     name: Update Test Branch
     runs-on: ubuntu-latest
     steps:
-      - name: Check PR status
-        run: |
-          if [ "${{ github.head_ref }}" == "${{ env.TEST_BRANCH }}" ]; then
-            echo "::error::You cannot update the test branch `${{ env.TEST_BRANCH }}` with itself. Please use a different branch."
-            exit 1
-          fi
-
       - name: Check if label matches trigger label
         run: |
           triggerLabel="${{ env.TRIGGER_LABEL }}"
@@ -44,6 +37,14 @@ jobs:
           if [ "$eventLabel" != "$triggerLabel" ]; then
             echo "SKIP=true" >> "$GITHUB_ENV"
             echo "::notice::Label $eventLabel does not match trigger label $triggerLabel. Skipping update."
+          fi
+
+      - name: Check PR status
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          if [ "${{ github.head_ref }}" == "${{ env.TEST_BRANCH }}" ]; then
+            echo "::error::You cannot update the test branch `${{ env.TEST_BRANCH }}` with itself. Please use a different branch."
+            exit 1
           fi
 
       - name: Checkout repository
