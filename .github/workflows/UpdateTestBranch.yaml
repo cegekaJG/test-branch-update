@@ -90,7 +90,9 @@ jobs:
             echo "::debug::$commit"
           done
 
-          echo "FEATURE_COMMITS=$feature_commits" >> $GITHUB_ENV
+          echo "FEATURE_COMMITS<<EOF" >> $GITHUB_ENV
+          echo "$feature_commits" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
           if [ -z "$feature_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits found. Skipping update."
@@ -163,7 +165,6 @@ jobs:
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits found. Skipping update."
           else
-            IFS=' '
             echo "New commits:
             ${new_commits[*]}"
             echo "FEATURE_COMMITS=${new_commits[*]}" >> $GITHUB_ENV
@@ -237,7 +238,6 @@ jobs:
               missing_commits+=($commit)
             fi
           done
-          IFS=' '
           echo "Missing commits:
           ${missing_commits[*]}"
           echo "MISSING_COMMITS=${missing_commits[*]}" >> $GITHUB_ENV
