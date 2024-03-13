@@ -11,12 +11,13 @@ on:
 env:
   TEST_BRANCH: test/main
   CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
-  FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
+  FEATURE_TEST_PREFIX: test/
   TRIGGER_LABEL: Ready for Test
   NOTICE_COMMENT_TAG: <!-- UpdateTestBranch/NOTICE -->
   COMMIT_COMMENT_TAG: <!-- UpdateTestBranch/COMMIT -->
   BOT_LABEL: Automated
   DISABLE_COMMENTS: false
+  FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
   SKIP_ALL: false
   LABEL_MATCH: false
   FEATURE_COMMITS: ''
@@ -37,7 +38,8 @@ jobs:
         run: |
           echo "TEST_BRANCH=${{ vars.UPDATETESTBRANCH_TEST_BRANCH || env.TEST_BRANCH }}" >> $GITHUB_ENV
           echo "CPICK_BRANCH_TEMPLATE=${{ vars.UPDATETESTBRANCH_CPICK_BRANCH_TEMPLATE || env.CPICK_BRANCH_TEMPLATE }}" >> $GITHUB_ENV
-          echo "FEATURE_TEST_BRANCH=${{ vars.UPDATETESTBRANCH_FEATURE_TEST_BRANCH || env.FEATURE_TEST_BRANCH }}" >> $GITHUB_ENV
+          echo "FEATURE_TEST_PREFIX=${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}"
+          echo "FEATURE_TEST_BRANCH=${{ env.FEATURE_TEST_PREFIX }}${{ github.head_ref }}" >> $GITHUB_ENV
           echo "TRIGGER_LABEL=${{ vars.UPDATETESTBRANCH_TRIGGER_LABEL || env.TRIGGER_LABEL }}" >> $GITHUB_ENV
           echo "NOTICE_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_NOTICE_COMMENT_TAG || env.NOTICE_COMMENT_TAG }}" >> $GITHUB_ENV
           echo "COMMIT_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_COMMIT_COMMENT_TAG || env.COMMIT_COMMENT_TAG }}" >> $GITHUB_ENV
@@ -58,7 +60,7 @@ jobs:
 
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4
 
       - name: Set up Git
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -162,7 +164,7 @@ jobs:
                 process.stdout.write(`${JSON.stringify(commitLines)}\n`);
                 return commitLines.map(line => line.slice(2));
               });
-            core.setOutput('ADDED_COMMITS', JSON.stringify(addedCommits))
+            core.setOutput('ADDED_COMMITS', JSON.stringify(addedCommits));
 
       - name: Determine commits to cherry-pick
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -378,7 +380,11 @@ jobs:
           git cherry-pick ${{ env.MISSING_COMMITS }}
           ```
           2) Resolve the merge conflicts and push the changes.
-          3) Mark the pull request as ready for review to trigger the status checks.'
+          3) Continue to the next commit in the cherry-pick list with the following command. Repeat steps 2 and 3 until all commits have been cherry-picked.
+          ```bash
+          git cherry-pick --continue
+          ```
+          4) Mark the pull request as ready for review to trigger the status checks.'
 
           COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body "${{ env.NOTICE_COMMENT_TAG }}
           $body")
@@ -388,20 +394,6 @@ jobs:
       - name: Comment on the original pull request
         if: ${{ env.SKIP_ALL == 'false' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          if [ -n "${{ env.PICKED_COMMITS }}" ]; then
-            body='Cherry-picked the following commits from `${{ github.head_ref }}` to `${{ env.FEATURE_TEST_BRANCH }}`:
-
-            '
-            for commit in ${{ env.PICKED_COMMITS }}; do
-              body="$body"'- $commit
-              '
-            done
-            body="$body"'
-            This list was made with the assumption that all listed commits have either been successfully squash merged into `${{ env.TEST_BRANCH }}` or are already present into `${{ env.TEST_BRANCH }}` or are in an active PR for `${{ env.TEST_BRANCH }}`. If a commit is missing or has been reverted, please manually update this list.'
-            gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.COMMIT_COMMENT_TAG }}
-            $body"
-          fi
-
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body='The cherry-picked changes from `${{ github.head_ref }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
 
@@ -411,8 +403,8 @@ jobs:
 
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.comment_on_new_pr.outputs.COMMENT_URL }} for more details.'
           fi
-          gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.NOTICE_COMMENT_TAG }}
-          $body"
+          gh pr comment ${{ github.event.pull_request.number }} --body '${{ env.NOTICE_COMMENT_TAG }}
+          $body'
 
   remove_label:
     name: Remove trigger label
