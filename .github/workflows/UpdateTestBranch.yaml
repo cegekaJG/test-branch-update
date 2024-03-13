@@ -171,12 +171,16 @@ jobs:
           picked_commits=(${{ env.PICKED_COMMITS }})
           added_commits=(${{ env.ADDED_COMMITS }})
 
-          echo -e 'Feature commits:\n'"${feature_commits[*]}"
-          echo -e 'Picked commits:\n'"${picked_commits[*]}"
-          echo -e 'Added commits:\n'"${added_commits[*]}"
+          echo -e 'Feature commits: '"${feature_commits[*]}"
+          if [ -n "$picked_commits" ]; then
+            echo -e 'Picked commits: '"${picked_commits[*]}"
+          fi
+          if [ -n "$added_commits" ]; then
+            echo -e 'Added commits: '"${added_commits[*]}"
+          fi
 
           new_commits=()
-          if [ -z "$picked_commits" && -z "$added_commits" ]; then
+          if [ -z "$picked_commits" ] && [ -z "$added_commits" ]; then
             new_commits=("${feature_commits[@]}")
           else
             for commit in "${feature_commits[@]}"; do
@@ -187,9 +191,9 @@ jobs:
           fi
           if [ -z "$new_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
-            echo "::notice::No new commits found. Skipping update."
+            echo "::notice::No new commits to cherry-pick found. Skipping update."
           else
-            echo 'New commits:\n"'${new_commits[*]}'
+            echo 'New commits: "'${new_commits[*]}'
           fi
 
           {
@@ -260,8 +264,10 @@ jobs:
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
 
-          echo -e 'Feature commits:\n'"${feature_commits[*]}"
-          echo -e 'Picked commits:\n'"${picked_commits[*]}"
+          echo -e 'Feature commits: '"${feature_commits[*]}"
+          if [ -n "$picked_commits" ]; then
+            echo -e 'Picked commits: '"${picked_commits[*]}"
+          fi
 
           missing_commits=()
           for commit in "${feature_commits[@]}"; do
@@ -269,8 +275,7 @@ jobs:
               missing_commits+=($commit)
             fi
           done
-          echo "Missing commits:
-          ${missing_commits[*]}"
+          echo 'Missing commits: '"${missing_commits[*]}"
 
           {
             echo "MISSING_COMMITS<<EOF"
