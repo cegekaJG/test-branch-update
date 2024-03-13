@@ -18,6 +18,7 @@ env:
   BOT_LABEL: Automated
   DISABLE_COMMENTS: false
   SKIP_ALL: false
+  LABEL_MATCH: false
   FEATURE_COMMITS: ''
   PICKED_COMMITS: ''
   ADDED_COMMITS: ''
@@ -38,14 +39,7 @@ jobs:
             echo "SKIP=true" >> $GITHUB_ENV
             echo "::notice::Label $eventLabel does not match trigger label $triggerLabel. Skipping update."
           fi
-
-      - name: Check PR status
-        if: ${{ env.SKIP_ALL == 'false' }}
-        run: |
-          if [ "${{ github.head_ref }}" == "${{ env.TEST_BRANCH }}" ]; then
-            echo "::error::You cannot update the test branch `${{ env.TEST_BRANCH }}` with itself. Please use a different branch."
-            exit 1
-          fi
+          echo "LABEL_MATCH=true" >> $GITHUB_ENV
 
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -56,6 +50,14 @@ jobs:
         run: |
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Check PR status
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          if [ "${{ github.head_ref }}" == "${{ env.TEST_BRANCH }}" ]; then
+            echo "::error::You cannot update the test branch `${{ env.TEST_BRANCH }}` with itself. Please use a different branch."
+            exit 1
+          fi
 
       - name: Check if ${{ env.TEST_BRANCH }} exists
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -77,8 +79,12 @@ jobs:
           git fetch origin ${{ github.head_ref }}
           feature_commits=$(git log --pretty=format:%h --no-merges origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
           feature_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
-          echo "FEATURE_COMMITS=$feature_commits" >> $GITHUB_ENV
           echo "Feature commits: $feature_commits_pretty"
+          echo "FEATURE_COMMITS=$feature_commits" >> $GITHUB_ENV
+          if [ -z "$feature_commits" ]; then
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            echo "::notice::No new commits found. Skipping update."
+          fi
 
       - name: Check if ${{ env.FEATURE_TEST_BRANCH }} exists
         id: check_feature_test_branch
@@ -98,8 +104,8 @@ jobs:
           git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
           picked_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
           picked_commits_pretty=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
-          echo "PICKED_COMMITS=$picked_commits" >> $GITHUB_ENV
           echo "Cherry-picked commits: $picked_commits_pretty"
+          echo "PICKED_COMMITS=$picked_commits" >> $GITHUB_ENV
 
       - name: Get list of already added commits from PR comments
         id: get_added_commits
@@ -138,8 +144,8 @@ jobs:
             fi
           done
           IFS=' '
-          echo "FEATURE_COMMITS=${new_commits[*]}" >> $GITHUB_ENV
           echo "New commits: ${new_commits[*]}"
+          echo "FEATURE_COMMITS=${new_commits[*]}" >> $GITHUB_ENV
 
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -174,8 +180,8 @@ jobs:
         run: |
           successful_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
           successful_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
-          echo "PICKED_COMMITS=$successful_commits" >> $GITHUB_ENV
           echo "Successful cherry-picks: $successful_commits_pretty"
+          echo "PICKED_COMMITS=$successful_commits" >> $GITHUB_ENV
 
       - name: "On success: Commit & push cherry-picked changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'success' }}
@@ -201,8 +207,8 @@ jobs:
             fi
           done
           IFS=' '
-          echo "MISSING_COMMITS=${missing_commits[*]}" >> $GITHUB_ENV
           echo "Missing commits: ${missing_commits[*]}"
+          echo "MISSING_COMMITS=${missing_commits[*]}" >> $GITHUB_ENV
 
       - name: "On failure: Abort cherry-pick & push changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
@@ -333,6 +339,6 @@ jobs:
           $body"
 
       - name: Remove label from original pull request
-        if: ${{ env.SKIP_ALL == 'false' }}
+        if: ${{ env.LABEL_MATCH == 'true' }}
         run: |
           gh pr edit ${{ github.event.pull_request.number }} --remove-label "${{ env.TRIGGER_LABEL }}"
