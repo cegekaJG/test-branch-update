@@ -193,7 +193,7 @@ jobs:
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits to cherry-pick found. Skipping update."
           else
-            echo 'New commits: "'${new_commits[*]}'
+            echo 'New commits: '"${new_commits[*]}"
           fi
 
           {
