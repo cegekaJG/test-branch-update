@@ -178,7 +178,7 @@ jobs:
           echo "Successful cherry-picks: $successful_commits_pretty"
 
       - name: "On success: Commit & push cherry-picked changes"
-        if: ${{ steps.cherry_pick.outcome == 'success' }}
+        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'success' }}
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             git commit
@@ -188,7 +188,7 @@ jobs:
           fi
 
       - name: "On failure: Exclude commits that were cherry-picked"
-        if: ${{ steps.cherry_pick.outcome == 'failure' }}
+        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
@@ -205,7 +205,7 @@ jobs:
           echo "Missing commits: ${missing_commits[*]}"
 
       - name: "On failure: Abort cherry-pick & push changes"
-        if: ${{ steps.cherry_pick.outcome == 'failure' }}
+        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
         run: |
           git reset --hard
           if [ -n "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
@@ -285,7 +285,7 @@ jobs:
 
       - name: Comment on the new pull request
         id: comment_on_new_pr
-        if: ${{ steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
         run: |
           body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
 
