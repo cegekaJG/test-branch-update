@@ -82,6 +82,7 @@ jobs:
           feature_commits=$(git log --pretty=format:%h --no-merges origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
           feature_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
           echo "Feature commits: $feature_commits_pretty"
+          echo "::debug::$feature_commits"
           echo "FEATURE_COMMITS=$feature_commits" >> $GITHUB_ENV
           if [ -z "$feature_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
@@ -107,6 +108,7 @@ jobs:
           picked_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
           picked_commits_pretty=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
           echo "Cherry-picked commits: $picked_commits_pretty"
+          echo "::debug::$picked_commits"
           echo "PICKED_COMMITS=$picked_commits" >> $GITHUB_ENV
 
       - name: Get list of already added commits from PR comments
@@ -151,6 +153,7 @@ jobs:
           else
             IFS=' '
             echo "New commits: ${new_commits[*]}"
+            echo "::debug::$new_commits"
             echo "FEATURE_COMMITS=${new_commits[*]}" >> $GITHUB_ENV
           fi
 
@@ -188,6 +191,7 @@ jobs:
           successful_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
           successful_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
           echo "Successful cherry-picks: $successful_commits_pretty"
+          echo "::debug::$successful_commits"
           echo "PICKED_COMMITS=$successful_commits" >> $GITHUB_ENV
 
       - name: "On success: Commit & push cherry-picked changes"
