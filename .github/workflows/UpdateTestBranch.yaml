@@ -95,8 +95,7 @@ jobs:
           feature_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
           feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
 
-          echo "Feature commits:
-            $feature_commits_pretty"
+          echo -e 'Feature commits:\n'"$feature_commits_pretty"
           for commit in $feature_commits; do
             echo "::debug::$commit"
           done
@@ -133,8 +132,7 @@ jobs:
           picked_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
           picked_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s %H" origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
 
-          echo "Cherry-picked commits:
-          $picked_commits_pretty"
+          echo -e 'Cherry-picked commits:\n'"$picked_commits_pretty"
           for commit in $picked_commits; do
             echo "::debug::$commit"
           done
@@ -173,9 +171,9 @@ jobs:
           picked_commits=(${{ env.PICKED_COMMITS }})
           added_commits=(${{ env.ADDED_COMMITS }})
 
-          echo "Feature commits: ${feature_commits[*]}"
-          echo "Picked commits: ${picked_commits[*]}"
-          echo "Added commits: ${added_commits[*]}"
+          echo -e 'Feature commits:\n'"${feature_commits[*]}"
+          echo -e 'Picked commits:\n'"${picked_commits[*]}"
+          echo -e 'Added commits:\n'"${added_commits[*]}"
 
           new_commits=()
           for commit in "${feature_commits[@]}"; do
@@ -187,8 +185,7 @@ jobs:
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits found. Skipping update."
           else
-            echo "New commits:
-            ${new_commits[*]}"
+            echo 'New commits:\n"'${new_commits[*]}'
           fi
 
           {
@@ -232,8 +229,7 @@ jobs:
           successful_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
           successful_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
 
-          echo "Successful cherry-picks:
-          $successful_commits_pretty"
+          echo -e 'Successful cherry-picks:\n'"$successful_commits_pretty"
           for commit in $successful_commits; do
             echo "::debug::$commit"
           done
@@ -259,10 +255,10 @@ jobs:
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
-          echo "Feature commits:
-          ${feature_commits[*]}"
-          echo "Picked commits:
-          ${picked_commits[*]}"
+
+          echo -e 'Feature commits:\n'"${feature_commits[*]}"
+          echo -e 'Picked commits:\n'"${picked_commits[*]}"
+
           missing_commits=()
           for commit in "${feature_commits[@]}"; do
             if [[ ! " ${picked_commits[@]} " =~ " $commit " ]] ; then
@@ -383,12 +379,13 @@ jobs:
       - name: Comment on the original pull request
         if: ${{ env.SKIP_ALL == 'false' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          if [ -n "${{ env.FEATURE_COMMITS }}" ]; then
+          if [ -n "${{ env.PICKED_COMMITS }}" ]; then
             body='Cherry-picked the following commits from `${{ github.head_ref }}` to `${{ env.FEATURE_TEST_BRANCH }}`:
 
             '
-            for commit in ${{ env.FEATURE_COMMITS }}; do
-              body="$body- $commit\n"
+            for commit in ${{ env.PICKED_COMMITS }}; do
+              body="$body"'- $commit
+              '
             done
             gh pr comment ${{ github.event.pull_request.number }} --body "${{ env.COMMIT_COMMENT_TAG }}
             $body"
