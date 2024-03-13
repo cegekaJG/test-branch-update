@@ -164,8 +164,8 @@ jobs:
               });
             core.setOutput('ADDED_COMMITS', JSON.stringify(addedCommits))
 
-      - name: Exclude commits that have already been cherry-picked
-        if: ${{ env.SKIP_ALL == 'false' && steps.check_feature_test_branch.outputs.SKIP_CHERRY_LIST == 'false' }}
+      - name: Determine commits to cherry-pick
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
@@ -176,11 +176,15 @@ jobs:
           echo -e 'Added commits:\n'"${added_commits[*]}"
 
           new_commits=()
-          for commit in "${feature_commits[@]}"; do
-            if [[ ! " ${picked_commits[@]} " =~ " $commit " ]] && [[ ! " ${added_commits[@]} " =~ " $commit " ]]; then
-              new_commits+=($commit)
-            fi
-          done
+          if [ -z "$picked_commits" && -z "$added_commits" ]; then
+            new_commits=("${feature_commits[@]}")
+          else
+            for commit in "${feature_commits[@]}"; do
+              if [[ ! " ${picked_commits[@]} " =~ " $commit " ]] && [[ ! " ${added_commits[@]} " =~ " $commit " ]]; then
+                new_commits+=($commit)
+              fi
+            done
+          fi
           if [ -z "$new_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits found. Skipping update."
@@ -250,7 +254,7 @@ jobs:
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           fi
 
-      - name: "On failure: Exclude commits that were cherry-picked"
+      - name: "On failure: Determine missing commits"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
