@@ -9,7 +9,7 @@ on:
       - main
 
 env:
-  TEST_BRANCH: testmaster
+  TEST_BRANCH: test/main
   CPICK_BRANCH_TEMPLATE: cherry-pick/${{ github.head_ref }}
   FEATURE_TEST_BRANCH: test/${{ github.head_ref }}
   TRIGGER_LABEL: Ready for Test
@@ -17,6 +17,7 @@ env:
   COMMIT_COMMENT_TAG: <!-- UpdateTestBranch/COMMIT -->
   BOT_LABEL: Automated
   DISABLE_COMMENTS: false
+  DEBUG: false
   SKIP_ALL: false
   LABEL_MATCH: false
   FEATURE_COMMITS: ''
@@ -33,6 +34,23 @@ jobs:
     outputs:
       LABEL_MATCH: ${{ env.LABEL_MATCH }}
     steps:
+      - name: Set environment variables
+        run: |
+          echo "TEST_BRANCH=${${{ vars.UPDATETESTBRANCH_TEST_BRANCH }}:-${{ env.TEST_BRANCH }}}" >> $GITHUB_ENV
+          echo "CPICK_BRANCH_TEMPLATE=${${{ vars.UPDATETESTBRANCH_CPICK_BRANCH_TEMPLATE }}:-${{ env.CPICK_BRANCH_TEMPLATE }}}" >> $GITHUB_ENV
+          echo "FEATURE_TEST_BRANCH=${${{ vars.UPDATETESTBRANCH_FEATURE_TEST_BRANCH }}:-${{ env.FEATURE_TEST_BRANCH }}}" >> $GITHUB_ENV
+          echo "TRIGGER_LABEL=${${{ vars.UPDATETESTBRANCH_TRIGGER_LABEL }}:-${{ env.TRIGGER_LABEL }}}" >> $GITHUB_ENV
+          echo "NOTICE_COMMENT_TAG=${${{ vars.UPDATETESTBRANCH_NOTICE_COMMENT_TAG }}:-${{ env.NOTICE_COMMENT_TAG }}}" >> $GITHUB_ENV
+          echo "COMMIT_COMMENT_TAG=${${{ vars.UPDATETESTBRANCH_COMMIT_COMMENT_TAG }}:-${{ env.COMMIT_COMMENT_TAG }}}" >> $GITHUB_ENV
+          echo "BOT_LABEL=${${{ vars.UPDATETESTBRANCH_BOT_LABEL }}:-${{ env.BOT_LABEL }}}" >> $GITHUB_ENV
+          echo "DISABLE_COMMENTS=${${{ vars.UPDATETESTBRANCH_DISABLE_COMMENTS }}:-${{ env.DISABLE_COMMENTS }}}" >> $GITHUB_ENV
+          echo "DEBUG=${${{ vars.UPDATETESTBRANCH_DEBUG }}:-${{ env.DEBUG }}}" >> $GITHUB_ENV
+
+      - name: Enable debug mode
+        if: ${{ env.DEBUG == 'true' }}
+        run: |
+          set -x
+
       - name: Check if label matches trigger label
         run: |
           triggerLabel="${{ env.TRIGGER_LABEL }}"
