@@ -113,12 +113,6 @@ jobs:
             echo "::notice::No new commits found. Skipping update."
           fi
 
-          {
-            echo "FEATURE_COMMITS<<EOF"
-            echo "$feature_commits"
-            echo "EOF"
-          } >> $GITHUB_ENV
-
       - name: Check if ${{ env.FEATURE_TEST_BRANCH }} exists
         id: check_feature_test_branch
         if: ${{ env.SKIP_ALL == 'false' }}
