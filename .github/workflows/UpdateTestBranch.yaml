@@ -155,7 +155,7 @@ jobs:
               repo: context.repo.repo
             })
             const addedCommits = comments.data
-              .filter(comment => comment.body.startsWith('<!-- UpdateTestBranch/COMMIT -->'))
+              .filter(comment => comment.body.startsWith('${{ env.COMMIT_COMMENT_TAG }}'))
               .flatMap(comment => {
                 const lines = comment.body.split('\n');
                 const commitLines = lines.slice(3);
@@ -357,7 +357,7 @@ jobs:
                     owner: context.repo.owner,
                     repo: context.repo.repo
                   })
-                  process.stdout.write(`Deleted comment ${comment.html_url}.\n`)
+                  process.stdout.write(`Deleted comment ${comment.html_url}\n`)
                 }
               })
             })
