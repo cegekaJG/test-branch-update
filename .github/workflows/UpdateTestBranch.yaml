@@ -189,6 +189,7 @@ jobs:
           fi
 
       - name: "Get list of newly cherry-picked commits"
+        if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           successful_commits=$(git log --pretty=format:%h --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
           successful_commits_pretty=$(git log --pretty="- %s (%H)" --no-merges origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
