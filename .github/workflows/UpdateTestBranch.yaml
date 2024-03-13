@@ -122,7 +122,7 @@ jobs:
       - name: Check if ${{ env.FEATURE_TEST_BRANCH }} exists
         id: check_feature_test_branch
         if: ${{ env.SKIP_ALL == 'false' }}
-        run:
+        run: |
           if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
             echo "SKIP_CHERRY_LIST=true" >> $GITHUB_OUTPUT
           else
