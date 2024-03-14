@@ -404,7 +404,7 @@ jobs:
         id: comment_on_new_pr
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          failed_commit = $($MISSING_COMMITS | head -n 1)
+          failed_commit=$(echo "$MISSING_COMMITS" | head -n 1)
           body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
 
           To manually resolve the merge conflicts, please follow these steps:
