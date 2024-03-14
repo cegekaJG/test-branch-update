@@ -19,8 +19,8 @@ env:
 
 jobs:
   list-commits:
+    if: ${{ github.event.pull_request.merged == true }} && contains(github.event.pull_request.labels.*.name, env.BOT_LABEL)
     runs-on: ubuntu-latest
-
     steps:
       - name: Set environment variables
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -29,14 +29,6 @@ jobs:
           echo "COMMIT_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_COMMIT_COMMENT_TAG || env.COMMIT_COMMENT_TAG }}" >> $GITHUB_ENV
           echo "BOT_LABEL=${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}" >> $GITHUB_ENV
           echo "FEATURE_TEST_PREFIX=${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}" >> $GITHUB_ENV
-
-      - name: Check if PR is a merge
-        if: ${{ env.SKIP_ALL == 'false' }}
-        run: |
-          if [ "${{ github.event.pull_request.merged }}" != "true" ]; then
-            echo "PR is not a merge. Skipping..."
-            echo "SKIP_ALL=true" >> $GITHUB_ENV
-          fi
 
       - name: Check if head branch is a feature test branch
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -53,7 +45,7 @@ jobs:
       - name: Find feature PR number
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          feature_pr_number=$(gh pr list --state open --json number --jq '.[] | select(.head.ref == "${{ env.FEATURE_BRANCH }}") | .number')
+          feature_pr_number=$(gh pr list --json number --jq '.[] | select(.head.ref == "${{ env.FEATURE_BRANCH }}") | .number')
           if [ -n "$feature_pr_number" ]; then
             echo "FEATURE_PR_NUMBER=$feature_pr_number" >> $GITHUB_ENV
           else
