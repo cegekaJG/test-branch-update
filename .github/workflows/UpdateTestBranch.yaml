@@ -255,34 +255,26 @@ jobs:
         run: |
           echo "Cherry-picking the following commits:"
           echo "${{ env.FEATURE_COMMITS }}"
+          successful_commits=()
 
           for commit in ${{ env.FEATURE_COMMITS }}; do
             message=$(git log --format=%s -n 1 $commit)
             message=$message'
 
             CP:'$commit
-            git cherry-pick $commit -m "$message" 1>/dev/null
+            git cherry-pick $commit "$message" 1>/dev/null
             if [ -n "$(git status --porcelain | grep '^U')" ]; then
               echo '::error::Cherry-pick failed. Please see ${{ github.event.pull_request.html_url }} for more details.'
               exit 1
             fi
+            git commit --amend -m "$message"
+            successful_commits+=($commit)
           done
           echo "Cherry-pick successful."
 
-      - name: "Get list of newly cherry-picked commits"
-        if: ${{ env.SKIP_ALL == 'false' }}
-        run: |
-          successful_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
-          successful_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})
-
-          echo -e 'Successful cherry-picks:\n'"$successful_commits_pretty"
-          for commit in $successful_commits; do
-            echo "::debug::$commit"
-          done
-
           {
             echo "PICKED_COMMITS<<EOF"
-            echo "$successful_commits"
+            echo "${successful_commits[*]}"
             echo "EOF"
           } >> $GITHUB_ENV
 
