@@ -187,6 +187,11 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo
             })
+            if (comments.data.length === 0) {
+              process.stdout.write('No comments with the tag "${{ env.COMMIT_COMMENT_TAG }}" found in ' + context.issue.html_url + '\n')
+              return;
+            }
+            process.stdout.write('Already added commits:\n')
             const addedCommits = comments.data
               .filter(comment => comment.body.startsWith('${{ env.COMMIT_COMMENT_TAG }}'))
               .flatMap(comment => {
@@ -262,7 +267,7 @@ jobs:
             message=$message'
 
             CP:'$commit
-            git cherry-pick $commit 1>/dev/null
+            git cherry-pick $commit 1>/dev/null || true
             if [ -n "$(git status --porcelain | grep '^U')" ]; then
               echo '::error::Cherry-pick failed. Please see ${{ github.event.pull_request.html_url }} for more details.'
               exit 1
