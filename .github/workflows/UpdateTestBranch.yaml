@@ -95,17 +95,19 @@ jobs:
           git fetch origin ${{ github.base_ref }}
           git fetch origin ${{ github.head_ref }}
           feature_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
+
+          if [ -z "$feature_commits" ]; then
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            echo "::notice::No new commits found. Skipping update."
+            exit 0
+          fi
+
           feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" origin/${{ github.base_ref }}..origin/${{ github.head_ref }})
 
           echo -e 'Feature commits:\n'"$feature_commits_pretty"
           for commit in $feature_commits; do
             echo "::debug::$commit"
           done
-
-          if [ -z "$feature_commits" ]; then
-            echo "SKIP_ALL=true" >> $GITHUB_ENV
-            echo "::notice::No new commits found. Skipping update."
-          fi
 
           {
             echo "FEATURE_COMMITS<<EOF"
@@ -131,11 +133,40 @@ jobs:
         run: |
           git fetch origin ${{ env.TEST_BRANCH }}
           git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
-          picked_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
-          picked_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s %H" origin/${{ env.FEATURE_TEST_BRANCH }}..origin/${{ env.TEST_BRANCH }})
+          feature_test_bodies=$(git log --reverse --pretty=format:%b origin/${{ env.TEST_BRANCH }}..origin/${{ env.FEATURE_TEST_BRANCH }})
 
-          echo -e 'Cherry-picked commits:\n'"$picked_commits_pretty"
+          if [ -z "$feature_test_bodies" ]; then
+            echo "No new commits in ${{ env.FEATURE_TEST_BRANCH }} found."
+            exit 0
+          fi
+
+          picked_commits=()
+          for msg in $feature_test_bodies; do
+            echo "::debug::Full message: $msg"
+            last_line=$(echo "$msg" | tail -n 1)
+            echo "::debug::Last line: $last_line"
+            if [[ $last_line != CP:* ]]; then
+              continue
+            fi
+
+            commit=${last_line#CP:}
+            echo "::debug::Commit: $commit"
+            if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
+              commit=$($commit:0:7)
+              picked_commits+=($commit)
+            fi
+          done
+
+          if [ -z "$picked_commits" ]; then
+            echo 'No cherry-picked commits in "${{ env.FEATURE_TEST_BRANCH }}" found.'
+            exit 0
+          fi
+
+          echo "Cherry-picked commits:"
+
           for commit in $picked_commits; do
+            commit_message=$(git log --format=%s -n 1 $commit)
+            echo "$(git log --pretty=format:"- %s ($H)" -n 1 $commit)"
             echo "::debug::$commit"
           done
 
@@ -224,14 +255,19 @@ jobs:
         run: |
           echo "Cherry-picking the following commits:"
           echo "${{ env.FEATURE_COMMITS }}"
-          git cherry-pick --no-commit ${{ env.FEATURE_COMMITS }} || true
-          git status --porcelain | grep '^U'
-          if [ -n "$(git status --porcelain | grep '^U')" ]; then
-            echo '::error::Cherry-pick failed. Please see ${{ github.event.pull_request.html_url }} for more details.'
-            exit 1
-          else
-            echo "Cherry-pick successful."
-          fi
+
+          for commit in ${{ env.FEATURE_COMMITS }}; do
+            message=$(git log --format=%s -n 1 $commit)
+            message=$message'
+
+            CP:'$commit
+            git cherry-pick $commit -m "$message" 1>/dev/null
+            if [ -n "$(git status --porcelain | grep '^U')" ]; then
+              echo '::error::Cherry-pick failed. Please see ${{ github.event.pull_request.html_url }} for more details.'
+              exit 1
+            fi
+          done
+          echo "Cherry-pick successful."
 
       - name: "Get list of newly cherry-picked commits"
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -368,6 +404,7 @@ jobs:
         id: comment_on_new_pr
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
         run: |
+          failed_commit = $($MISSING_COMMITS | head -n 1)
           body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
 
           To manually resolve the merge conflicts, please follow these steps:
@@ -377,14 +414,10 @@ jobs:
           git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
           git checkout ${{ env.FEATURE_TEST_BRANCH }}
           git pull origin ${{ env.FEATURE_TEST_BRANCH }}
-          git cherry-pick ${{ env.MISSING_COMMITS }}
+          git cherry-pick '"$failed_commit"'
           ```
           2) Resolve the merge conflicts and push the changes.
-          3) Continue to the next commit in the cherry-pick list with the following command. Repeat steps 2 and 3 until all commits have been cherry-picked.
-          ```bash
-          git cherry-pick --continue
-          ```
-          4) Mark the pull request as ready for review to trigger the status checks.'
+          3) Re-run the workflow by adding the label `${{ env.TRIGGER_LABEL }}` to ${{ github.event.pull_request.html_url }} again.'
 
           COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body "${{ env.NOTICE_COMMENT_TAG }}
           $body")
