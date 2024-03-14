@@ -1,0 +1,91 @@
+name: Document Merged Commits
+
+on:
+  pull_request:
+    types:
+      - closed
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NOTICE_COMMENT_TAG: <!-- UpdateTestBranch/NOTICE -->
+  COMMIT_COMMENT_TAG: <!-- UpdateTestBranch/COMMIT -->
+  BOT_LABEL: Automated
+  FEATURE_TEST_PREFIX: test/
+  SKIP_ALL: false
+  ADDED_COMMITS: ''
+  PICKED_COMMITS: ''
+  FEATURE_BRANCH: ''
+  FEATURE_PR_NUMBER: ''
+
+jobs:
+  list-commits:
+    if: ${{ github.event.pull_request.merged == true }} && contains(github.event.pull_request.labels.*.name, env.BOT_LABEL)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set environment variables
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          echo "TEST_BRANCH=${{ vars.UPDATETESTBRANCH_TEST_BRANCH || env.TEST_BRANCH }}" >> $GITHUB_ENV
+          echo "COMMIT_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_COMMIT_COMMENT_TAG || env.COMMIT_COMMENT_TAG }}" >> $GITHUB_ENV
+          echo "BOT_LABEL=${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}" >> $GITHUB_ENV
+          echo "FEATURE_TEST_PREFIX=${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}" >> $GITHUB_ENV
+
+      - name: Check if head branch is a feature test branch
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          if [[ "${{ github.head_ref }}" != ${{ env.FEATURE_TEST_PREFIX }}* ]]; then
+            echo "${{ github.head_ref }} is not a feature test branch. Skipping..."
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+          else
+            feature_branch=${${{github.head_ref}}#${{ env.FEATURE_TEST_PREFIX }}}
+            echo "Feature branch should be called $feature_branch."
+            echo "FEATURE_BRANCH=$feature_branch" >> $GITHUB_ENV
+          fi
+
+      - name: Find feature PR number
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          feature_pr_number=$(gh pr list --json number --jq '.[] | select(.head.ref == "${{ env.FEATURE_BRANCH }}") | .number')
+          if [ -n "$feature_pr_number" ]; then
+            echo "FEATURE_PR_NUMBER=$feature_pr_number" >> $GITHUB_ENV
+          else
+            echo "Unable to find PR with head ref ${{ env.FEATURE_BRANCH }}."
+          fi
+
+      - name: Checkout repository
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: actions/checkout@v4
+
+      - name: Set up Git
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Get newly added commits
+        id: list-commits
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          picked_commits=$(git log --no-merges --pretty=format:"- %h" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.merge_commit_sha }})
+
+          {
+            echo "PICKED_COMMITS=EOF"
+            echo "$picked_commits"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Comment on the original pull request
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          if [ -n "${{ env.PICKED_COMMITS }}" ]; then
+            body='${{ github.event.pull_request.html_url }} merged the following commits from `${{ env.FEATURE_BRANCH }}` into `${{ github.head_ref }}`:\n\n'
+            for commit in ${{ env.PICKED_COMMITS }}; do
+              body="$body"'- $commit
+              '
+            done
+            body="$body"'
+            This list contains all commits that were successfully squash merged into `${{ github.base_ref }}` by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
+            gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
+            $body'
+          fi
