@@ -423,4 +423,4 @@ jobs:
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.comment_on_new_pr.outputs.COMMENT_URL }} for more details.'
           fi
           gh pr comment ${{ github.event.issue.number }} --body '${{ env.NOTICE_COMMENT_TAG }}
-          $body'
+          '"$body"
