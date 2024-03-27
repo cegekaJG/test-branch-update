@@ -41,9 +41,15 @@ jobs:
         id: pull_request
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          pr=$(gh pr view ${{ github.event.issue.number }} --json headRefName,baseRefName,state --jq '.headRefName, .baseRefName')
-          echo "HEAD_REF=$(echo $pr | jq -r '.[1]')" >> $GITHUB_OUTPUT
-          echo "BASE_REF=$(echo $pr | jq -r '.[2]')" >> $GITHUB_OUTPUT
+          pr_info=$(gh pr view ${{ github.event.issue.number }} --json headRefName,baseRefName --jq '.headRefName, .baseRefName')
+
+          old_IFS=$IFS
+          IFS=$'\n'
+          read -d '' -ra pri_array <<< "$pr_info"
+          IFS=$old_IFS
+
+          echo "HEAD_REF=${pri_array[0]}" >> $GITHUB_OUTPUT
+          echo "BASE_REF=${pri_array[1]}" >> $GITHUB_OUTPUT
 
       - name: Set environment variables
         if: ${{ env.SKIP_ALL == 'false' }}
