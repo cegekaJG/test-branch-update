@@ -43,10 +43,15 @@ jobs:
         run: |
           pr_info=$(gh pr view ${{ github.event.issue.number }} --json headRefName,baseRefName --jq '.headRefName, .baseRefName')
 
+          echo "::debug::PR info: $pr_info"
+
           old_IFS=$IFS
           IFS=$'\n'
           read -d '' -ra pri_array <<< "$pr_info"
           IFS=$old_IFS
+
+          echo "Head ref: ${pri_array[0]}"
+          echo "Base ref: ${pri_array[1]}"
 
           echo "HEAD_REF=${pri_array[0]}" >> $GITHUB_OUTPUT
           echo "BASE_REF=${pri_array[1]}" >> $GITHUB_OUTPUT
