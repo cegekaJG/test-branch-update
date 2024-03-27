@@ -45,6 +45,11 @@ jobs:
 
           echo "::debug::PR info: $pr_info"
 
+          if [ -z "$pr_info" ]; then
+            echo "::error::Failed to get PR information. Please try again."
+            exit 1
+          fi
+
           old_IFS=$IFS
           IFS=$'\n'
           read -d '' -ra pri_array <<< "$pr_info"
