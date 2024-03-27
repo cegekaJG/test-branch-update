@@ -33,6 +33,10 @@ jobs:
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Checkout repository
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: actions/checkout@v4
+
       - name: Get PR object
         id: pull_request
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -64,10 +68,6 @@ jobs:
             echo "::error::The pull request ${{ github.event.issue.pull_request.html_url }} is already targeting the test branch `${{ env.TEST_BRANCH }}`."
             exit 1
           fi
-
-      - name: Checkout repository
-        if: ${{ env.SKIP_ALL == 'false' }}
-        uses: actions/checkout@v4
 
       - name: Check if ${{ env.TEST_BRANCH }} exists
         if: ${{ env.SKIP_ALL == 'false' }}
