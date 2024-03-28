@@ -37,29 +37,31 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         uses: actions/checkout@v4
 
+      - name: 'Setup jq'
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: dcarbone/install-jq-action@v2
+
       - name: Get PR object
         id: pull_request
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           pr_info=$(gh pr view ${{ github.event.issue.number }} --json headRefName,baseRefName --jq '.headRefName, .baseRefName')
 
-          echo "::debug::PR info: $pr_info"
+          printf "::debug::PR info: %q\n" "$pr_info"
 
           if [ -z "$pr_info" ]; then
             echo "::error::Failed to get PR information. Please try again."
             exit 1
           fi
 
-          old_IFS=$IFS
-          IFS=$'\n'
-          read -d '' -ra pri_array <<< "$pr_info"
-          IFS=$old_IFS
+          $head_ref=$pr_info | jq -r '.[0]'
+          $base_ref=$pr_info | jq -r '.[1]'
 
-          echo "Head ref: ${pri_array[0]}"
-          echo "Base ref: ${pri_array[1]}"
+          echo "Head ref: $head_ref"
+          echo "Base ref: $base_ref"
 
-          echo "HEAD_REF=${pri_array[0]}" >> $GITHUB_OUTPUT
-          echo "BASE_REF=${pri_array[1]}" >> $GITHUB_OUTPUT
+          echo "HEAD_REF=$head_ref" >> $GITHUB_OUTPUT
+          echo "BASE_REF=$base_ref" >> $GITHUB_OUTPUT
 
       - name: Set environment variables
         if: ${{ env.SKIP_ALL == 'false' }}
