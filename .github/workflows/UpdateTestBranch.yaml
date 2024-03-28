@@ -54,8 +54,8 @@ jobs:
             exit 1
           fi
 
-          $head_ref=$pr_info | jq -r '.[0]'
-          $base_ref=$pr_info | jq -r '.[1]'
+          head_ref=$(echo "$pr_info" | jq -r '.[0]')
+          base_ref=$(echo "$pr_info" | jq -r '.[1]')
 
           echo "Head ref: $head_ref"
           echo "Base ref: $base_ref"
