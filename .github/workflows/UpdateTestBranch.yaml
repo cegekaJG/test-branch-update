@@ -143,7 +143,7 @@ jobs:
           feature_test_bodies=$(git log --reverse --pretty=format:%b origin/${{ env.TEST_BRANCH }}..origin/${{ env.FEATURE_TEST_BRANCH }})
 
           if [ -z "$feature_test_bodies" ]; then
-            echo "No new commits in ${{ env.FEATURE_TEST_BRANCH }} found."
+            echo "::notice::No new commits in ${{ env.FEATURE_TEST_BRANCH }} found."
             exit 0
           fi
 
@@ -165,7 +165,7 @@ jobs:
           done
 
           if [ -z "$picked_commits" ]; then
-            echo 'No cherry-picked commits in "${{ env.FEATURE_TEST_BRANCH }}" found.'
+            echo '::notice::No cherry-picked commits in "${{ env.FEATURE_TEST_BRANCH }}" found.'
             exit 0
           fi
 
