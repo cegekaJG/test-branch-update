@@ -296,8 +296,10 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git commit
           fi
-          if [ -z "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+          if [ -n "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
+          else
+            echo "No new commits to push."
           fi
 
       - name: "On failure: Determine missing commits"
