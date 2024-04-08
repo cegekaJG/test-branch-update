@@ -45,7 +45,7 @@ jobs:
         id: pull_request
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          pr_info=$(gh pr view ${{ github.event.issue.number }} --json headRefName,baseRefName --jq '.headRefName, .baseRefName')
+          pr_info=$(gh pr view ${{ github.event.issue.number }} --json headRefName,baseRefName)
 
           printf "::debug::PR info: %q\n" "$pr_info"
 
@@ -54,8 +54,8 @@ jobs:
             exit 1
           fi
 
-          head_ref=$(echo "$pr_info" | jq -r '.[0]')
-          base_ref=$(echo "$pr_info" | jq -r '.[1]')
+          head_ref=$(echo "$pr_info" | jq -r '.headRefName')
+          base_ref=$(echo "$pr_info" | jq -r '.baseRefName')
 
           echo "Head ref: $head_ref"
           echo "Base ref: $base_ref"
