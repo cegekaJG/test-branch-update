@@ -42,25 +42,42 @@ jobs:
             echo "FEATURE_BRANCH=$feature_branch" >> $GITHUB_ENV
           fi
 
-      - name: Find feature PR number
-        if: ${{ env.SKIP_ALL == 'false' }}
-        run: |
-          feature_pr_number=$(gh pr list --json number --jq '.[] | select(.head.ref == "${{ env.FEATURE_BRANCH }}") | .number')
-          if [ -n "$feature_pr_number" ]; then
-            echo "FEATURE_PR_NUMBER=$feature_pr_number" >> $GITHUB_ENV
-          else
-            echo "Unable to find PR with head ref ${{ env.FEATURE_BRANCH }}."
-          fi
-
-      - name: Checkout repository
-        if: ${{ env.SKIP_ALL == 'false' }}
-        uses: actions/checkout@v4
-
       - name: Set up Git
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: actions/checkout@v4
+
+      - name: 'Setup jq'
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: dcarbone/install-jq-action@v2
+
+      - name: Find feature PR number
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          prs_json=$(gh pr list --json headRefName,number)
+          feature_pr_json=$(echo $prs_json | jq --arg feature_branch "${{ env.FEATURE_BRANCH }}" '.[] | select(.headRefName == $feature_branch)')
+          if [ -z "$feature_pr_json" ]; then
+            echo "Unable to find PR with head ref ${{ env.FEATURE_BRANCH }}."
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            exit 1
+          fi
+          feature_pr_number=$(echo $feature_pr_json | jq '.number')
+          if [ -n "$feature_pr_number" ]; then
+            echo "FEATURE_PR_NUMBER=$feature_pr_number" >> $GITHUB_ENV
+          else
+            echo "Unable to find PR with head ref ${{ env.FEATURE_BRANCH }}."
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            exit 1
+          fi
+
+      - name: Checkout repository
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: actions/checkout@v4
 
       - name: Get newly added commits
         id: list-commits
