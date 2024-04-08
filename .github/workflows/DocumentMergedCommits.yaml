@@ -37,10 +37,10 @@ jobs:
             echo "${{ github.head_ref }} is not a feature test branch. Skipping..."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
           else
-            head_branch=${{github.head_ref}}
+            head_branch=${{ github.head_ref }}
             feature_branch=${head_branch#${{ env.FEATURE_TEST_PREFIX }}}
             if [ -z "$feature_branch" ]; then
-              echo "::error::Unable to determine feature branch name from $head_branch with prefix ${{env.FEATURE_TEST_PREFIX}}."
+              echo "::error::Unable to determine feature branch name from $head_branch with prefix ${{ env.FEATURE_TEST_PREFIX }}."
               echo "SKIP_ALL=true" >> $GITHUB_ENV
               exit 1
             else
@@ -93,8 +93,42 @@ jobs:
         id: list-commits
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}
-          picked_commits=$(git log --no-merges --pretty=format:"- %h" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.merge_commit_sha }})
+          git fetch origin
+          common_branch=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          added_commits=$(git log --no-merges --pretty=format:%h $common_branch..${{ github.event.pull_request.head.sha }})
+
+          echo "Non-merge commits added:"
+          for commit in $added_commits; do
+            echo "- $commit"
+          done
+
+          {
+            echo "ADDED_COMMITS=EOF"
+            echo "$added_commits"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Get SHAs of original commits
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          picked_commits=""
+          for commit in ${{ env.ADDED_COMMITS }}; do
+            commit_comment=$(git show -s --format=%B $commit)
+            commit_sha=$(echo "$commit_comment" | grep -oE '^CP: .*$' | sed 's/^CP: //')
+            if [ -n "$commit_sha" ]; then
+              echo "Found original commit $commit_sha for cherry-pick commit $commit."
+              if [ -n "$picked_commits" ]; then
+                picked_commits="$picked_commits"$'\n'"- $commit_sha"
+              else
+                picked_commits="- $commit_sha"
+              fi
+            else
+              echo "No commit found for commit $commit."
+            fi
+          done
+
+          echo "Original commits:"
+          echo "$picked_commits"
 
           {
             echo "PICKED_COMMITS=EOF"
@@ -106,13 +140,7 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ -n "${{ env.PICKED_COMMITS }}" ]; then
-            body='${{ github.event.pull_request.html_url }} merged the following commits from `${{ env.FEATURE_BRANCH }}` into `${{ github.head_ref }}`:\n\n'
-            for commit in ${{ env.PICKED_COMMITS }}; do
-              body="$body"'- $commit
-              '
-            done
-            body="$body"'
-            This list contains all commits that were successfully squash merged into `${{ github.base_ref }}` by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
+            body='${{ github.event.pull_request.html_url }} merged the following commits from `${{ env.FEATURE_BRANCH }}` into `${{ github.head_ref }}`:\n\n${{ env.PICKED_COMMITS}}\n\nThis list contains all commits that were successfully squash merged into `${{ github.base_ref }}` by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
             gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
             $body'
           fi
