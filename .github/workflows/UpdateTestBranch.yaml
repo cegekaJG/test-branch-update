@@ -436,7 +436,7 @@ jobs:
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body='The cherry-picked changes from `${{ steps.pull_request.outputs.HEAD_REF }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
 
-            A new pull request has been created to test the changes. See ${{ steps.comment_on_new_pr.outputs.COMMENT_URL }} for more details.'
+            A new pull request has been created to test the changes. See ${{ env.TEST_PR_URL }} for more details.'
           else
             body='Unable to cherry-pick the changes from `${{ steps.pull_request.outputs.HEAD_REF }}` to the `${{ env.TEST_BRANCH }}` branch.
 
