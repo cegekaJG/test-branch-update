@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  BRANCH_NAME: "feature-1234567890"
+  BRANCH_NAME: "feature"
   TEST_BRANCH: "test/main"
 
 jobs:
@@ -22,24 +22,17 @@ jobs:
           git checkout -b ${{ env.TEST_BRANCH }}
           git push origin ${{ env.TEST_BRANCH }}
 
-      - name: Create feature branch
+      - name: Create feature branch & file
         run: |
-          branch_name=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 10 | head -n 1)
-          $branch_name = "feature-$branch_name"
-          git checkout -b $branch_name
-          echo "BRANCH_NAME=$branch_name" >> $GITHUB_ENV
-
-      - name: Create random file
-        run: |
-          file_name=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 10 | head -n 1)
-          echo "This is a random file" > $file_name
+          git checkout -b ${{ env.BRANCH_NAME }}
+          echo "This is a random file" > newfile.txt
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: ${{ github.ref }}
-          branch: feature-$branch_name
+          branch: ${{ env.BRANCH_NAME }}
           title: "Pull Request for ${{ github.ref }}"
           body: "This pull request was created by the workflow."
           assignees: ${{ github.actor }}
