@@ -106,27 +106,27 @@ jobs:
           picked_commits=""
           for commit in ${{ env.ADDED_COMMITS }}; do
             commit_comment=$(git show -s --format=%B $commit)
-            commit_sha=$(echo "$commit_comment" | grep -oE '^CP: .*$' | sed 's/^CP: //')
+            commit_sha=$(echo "$commit_comment" | grep -oE '^CP:.*$' | sed 's/^CP:\(.\{7\}\).*/\1/')
             if [ -n "$commit_sha" ]; then
               echo "Found original commit $commit_sha for cherry-pick commit $commit."
               if [ -n "$picked_commits" ]; then
-                picked_commits="$picked_commits"$'\n'"- $commit_sha"
+                picked_commits="$picked_commits $commit_sha"
               else
-                picked_commits="- $commit_sha"
+                picked_commits="$commit_sha"
               fi
             else
               echo "No commit found for commit $commit."
             fi
           done
 
-          echo "Original commits:"
-          echo "$picked_commits"
-
-          {
-            echo "PICKED_COMMITS=EOF"
+          if [ -n "$picked_commits" ]; then
+            echo "Original commits:"
             echo "$picked_commits"
-            echo "EOF"
-          } >> $GITHUB_ENV
+
+            echo "PICKED_COMMITS=$picked_commits" >> $GITHUB_ENV
+          else
+            echo "No original commits found."
+          fi
 
           - name: Clean up comments
             if: ${{ env.SKIP_ALL == 'false' }}
@@ -155,7 +155,13 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ -n "${{ env.PICKED_COMMITS }}" ]; then
-            body='${{ github.event.pull_request.html_url }} merged the following commits from `${{ env.FEATURE_BRANCH }}` into `${{ github.head_ref }}`:\n\n${{ env.PICKED_COMMITS}}\n\nThis list contains all commits that were successfully squash merged into `${{ github.base_ref }}` by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
+            body='${{ github.event.pull_request.html_url }} merged the following commits from `${{ env.FEATURE_BRANCH }}` into `${{ github.head_ref }}`:\n\n'
+            for commit in ${{ env.PICKED_COMMITS }}; do
+              body="$body"'- $commit
+              '
+            done
+            body="$body"'
+            This list contains all commits that were successfully squash merged into `${{ github.base_ref }}` by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
             gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
             $body'
           fi
