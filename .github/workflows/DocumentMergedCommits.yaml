@@ -85,10 +85,6 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout repository
-        if: ${{ env.SKIP_ALL == 'false' }}
-        uses: actions/checkout@v4
-
       - name: Get newly added commits
         id: list-commits
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -144,3 +140,13 @@ jobs:
             gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
             $body'
           fi
+
+  delete-head:
+    name: Delete head branch
+    needs: list-commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: delete branch
+        uses: SvanBoxel/delete-merged-branch@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
