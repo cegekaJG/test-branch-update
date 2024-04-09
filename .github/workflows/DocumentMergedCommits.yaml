@@ -165,10 +165,20 @@ jobs:
 
   delete-head:
     name: Delete head branch
+    if: ${{ github.event.pull_request.merged == true }}
     needs: list-commits
     runs-on: ubuntu-latest
     steps:
-      - name: delete branch
-        uses: SvanBoxel/delete-merged-branch@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Git
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: actions/checkout@v4
+
+      - name: Delete head branch
+        run: |
+          git push origin --delete ${{ github.head_ref }}
