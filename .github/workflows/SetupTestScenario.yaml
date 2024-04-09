@@ -20,12 +20,15 @@ jobs:
             git push --delete origin ${{ env.TEST_BRANCH }}
           fi
           git checkout -b ${{ env.TEST_BRANCH }}
-          git push origin ${{ env.TEST_BRANCH }}
+          git push origin ${{ env.TEST_BRANCH }} --force
 
       - name: Create feature branch & file
         run: |
           git checkout -b ${{ env.BRANCH_NAME }}
           echo "This is a random file" > newfile.txt
+          git add newfile.txt
+          git commit -m "Add new file"
+          git push origin ${{ env.BRANCH_NAME }}
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
