@@ -349,15 +349,18 @@ jobs:
       - name: Create/Update pull request
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
+          feature_title=${{ github.event.issue.title }}
+          feature_title=$(echo $feature_title | sed 's/"/\\"/g')
+          body='This automated pull request adds the cherry-picked changes from `${{ steps.pull_request.outputs.HEAD_REF }}` to `${{ env.TEST_BRANCH }}`.
+          See ${{ github.event.issue.pull_request.html_url }} for more details.'
           if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ env.FEATURE_TEST_BRANCH }} --state open | wc -l)" == 0 ]; then
             TEST_PR_URL=$(gh pr create \
               --base ${{ env.TEST_BRANCH }} \
               --head ${{ env.FEATURE_TEST_BRANCH }} \
-              --title "${{ github.event.issue.title }} - Test" \
+              --title "$feature_title - Test" \
               --label ${{ env.BOT_LABEL }} \
               --assignee ${{ github.actor }} \
-              --body 'This automated pull request adds the cherry-picked changes from `${{ steps.pull_request.outputs.HEAD_REF }}` to `${{ env.TEST_BRANCH }}`.
-              See ${{ github.event.issue.pull_request.html_url }} for more details.')
+              --body "$body")
             echo "::notice::$TEST_PR_URL created."
           else
             TEST_PR_URL=$(gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
