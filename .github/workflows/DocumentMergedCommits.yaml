@@ -19,6 +19,7 @@ env:
 
 jobs:
   list-commits:
+    name: List commits in feature PR
     if: ${{ github.event.pull_request.merged == true }} && contains(github.event.pull_request.labels.*.name, env.BOT_LABEL)
     runs-on: ubuntu-latest
     steps:
