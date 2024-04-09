@@ -97,11 +97,7 @@ jobs:
             echo "- $commit"
           done
 
-          {
-            echo "ADDED_COMMITS=EOF"
-            echo "$added_commits"
-            echo "EOF"
-          } >> $GITHUB_ENV
+          echo "ADDED_COMMITS=$added_commits" >> $GITHUB_ENV
 
       - name: Get SHAs of original commits
         if: ${{ env.SKIP_ALL == 'false' }}
