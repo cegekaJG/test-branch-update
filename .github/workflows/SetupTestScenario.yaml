@@ -14,13 +14,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Delete branches
-        run: |
-          git branch | grep -v "main" | xargs git branch -D
-          git push origin --delete $(git branch | grep -v "main" | awk '{print $1}')
-
       - name: Create test branch
         run: |
+          if git show-ref --quiet refs/heads/${{ env.TEST_BRANCH }}; then
+            git push --delete origin ${{ env.TEST_BRANCH }}
+          fi
           git checkout -b ${{ env.TEST_BRANCH }}
           git push origin ${{ env.TEST_BRANCH }}
 
