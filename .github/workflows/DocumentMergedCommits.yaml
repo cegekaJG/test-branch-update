@@ -170,7 +170,6 @@ jobs:
 
   delete-head:
     name: Delete head branch
-    if: ${{ github.event.pull_request.merged == true }}
     needs: list-commits
     runs-on: ubuntu-latest
     steps:
