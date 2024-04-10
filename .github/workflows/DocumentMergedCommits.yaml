@@ -153,7 +153,8 @@ jobs:
               }
             })
 
-      - name: Comment on the original pull request
+      - name: Set comment body
+        id: set-comment-body
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ -n "${{ env.PICKED_COMMITS }}" ]; then
@@ -163,8 +164,19 @@ jobs:
             done
             body="$body\nThis list contains all commits that were successfully squash merged into \`${{ github.base_ref }}\` by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment."
             echo -e "$body"
-            gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body "${{ env.COMMIT_COMMENT_TAG }}\n$body"
+            {
+              echo "COMMENT_BODY<<EOF"
+              echo "$body"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
           fi
+
+      - name: Comment on the original pull request
+        if: ${{ env.SKIP_ALL == 'false' }} && steps.set-comment-body.outputs.COMMENT_BODY
+        run: |
+          echo "${{ steps.set-comment-body.outputs.COMMENT_BODY }}"
+          gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body "${{ env.COMMIT_COMMENT_TAG }}
+          ${{ steps.set-comment-body.outputs.COMMENT_BODY }}"
 
   delete-head:
     name: Delete head branch
