@@ -273,7 +273,7 @@ jobs:
             message=$(git log --format=%s -n 1 $commit)
             message=$message'
 
-            CP:'$commit
+          CP:'$commit
             git cherry-pick $commit 1>/dev/null || true
             if [ -n "$(git status --porcelain | grep '^U')" ]; then
               echo '::error::Cherry-pick failed. Please see ${{ github.event.issue.pull_request.html_url }} for more details.'
@@ -349,7 +349,8 @@ jobs:
       - name: Create/Update pull request
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          feature_title=$(printf '%s' ${{ github.event.issue.title }} | sed 's/"/\\"/g')
+          feature_title=$(printf '%s' '${{ github.event.issue.title }}' | sed 's/"/\\"/g')
+          echo "Old PR title: $feature_title"
           body='This automated pull request adds the cherry-picked changes from `${{ steps.pull_request.outputs.HEAD_REF }}` to `${{ env.TEST_BRANCH }}`.
           See ${{ github.event.issue.pull_request.html_url }} for more details.'
           if [ "$(gh pr list --base ${{ env.TEST_BRANCH }} --head ${{ env.FEATURE_TEST_BRANCH }} --state open | wc -l)" == 0 ]; then
