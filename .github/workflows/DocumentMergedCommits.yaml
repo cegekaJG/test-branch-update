@@ -171,6 +171,7 @@ jobs:
   delete-head:
     name: Delete head branch
     needs: list-commits
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Set up Git
