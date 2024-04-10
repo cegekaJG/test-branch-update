@@ -140,8 +140,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo
             })
-            oldPrComments.forEach(comments => {
-              comments.data.forEach(comment => {
+            oldPrComments.then(comments => {
+              for (const comment of comments.data) {
                 if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ env.NOTICE_COMMENT_TAG }}')) {
                   github.rest.issues.deleteComment({
                     comment_id: comment.id,
@@ -150,7 +150,7 @@ jobs:
                   })
                   process.stdout.write(`Deleted comment ${comment.html_url}\n`)
                 }
-              })
+              }
             })
 
       - name: Comment on the original pull request
