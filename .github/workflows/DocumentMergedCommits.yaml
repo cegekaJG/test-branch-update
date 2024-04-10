@@ -164,8 +164,8 @@ jobs:
             done
             body="$body"'
             This list contains all commits that were successfully squash merged into `${{ github.base_ref }}` by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
-            gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
-            $body'
+            echo "$body"
+            gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body "${{ env.COMMIT_COMMENT_TAG }}\n$body"
           fi
 
   delete-head:
