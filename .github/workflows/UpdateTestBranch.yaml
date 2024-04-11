@@ -187,18 +187,18 @@ jobs:
         id: get_added_commits
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          echo "Checking for existing comments with the tag '${{ env.COMMIT_COMMENT_TAG }}' in ${{ github.event.issue.html_url }}..."
+          echo 'Checking for existing comments with the tag "${{ env.COMMIT_COMMENT_TAG }}" in <${{ github.event.issue.html_url }}>...'
           comments=$(gh pr view ${{ github.event.issue.number }} --json comments --jq '.comments[].body')
           if [ -z "$comments" ]; then
-            echo "No comments found in ${{ github.event.issue.html_url }}."
+            echo "No comments found in <${{ github.event.issue.html_url }}>."
             exit 0
           fi
           added_commits=()
           for comment in $comments; do
             author=$(echo "$comment" | jq -r '.author.login')
             body=$(echo "$comment" | jq -r '.body')
-            if [ "$author" == 'github-actions[bot]' ] && [[ "$body" == *"${{ env.COMMIT_COMMENT_TAG }}"* ]]; then
-              echo "Found comment with the tag '${{ env.COMMIT_COMMENT_TAG }}'."
+            if [ "$author" == 'github-actions[bot]' ] && [[ '$body' == *'${{ env.COMMIT_COMMENT_TAG }}'* ]]; then
+              echo 'Found comment with the tag "${{ env.COMMIT_COMMENT_TAG }}".'
               found_commits=$(echo "$body" | grep -oP '(?<=- )\S*')
               echo "Added commits:"
               for commit in $found_commits; do
@@ -432,8 +432,7 @@ jobs:
           2) Resolve the merge conflicts and push the changes.
           3) Re-run the workflow by commenting `!update-test-branch` in ${{ github.event.issue.pull_request.html_url }} again.'
 
-          COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body "${{ env.NOTICE_COMMENT_TAG }}
-          $body")
+          COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body '${{ env.NOTICE_COMMENT_TAG }}'"$body")
           echo $COMMENT_URL
           echo "COMMENT_URL=$COMMENT_URL" >> $GITHUB_OUTPUT
 
@@ -449,5 +448,4 @@ jobs:
 
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.comment_on_new_pr.outputs.COMMENT_URL }} for more details.'
           fi
-          gh pr comment ${{ github.event.issue.number }} --body '${{ env.NOTICE_COMMENT_TAG }}
-          '"$body"
+          gh pr comment ${{ github.event.issue.number }} --body '${{ env.NOTICE_COMMENT_TAG }}'"$body"
