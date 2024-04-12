@@ -172,7 +172,7 @@ jobs:
           fi
 
       - name: Comment on the original pull request
-        if: ${{ env.SKIP_ALL == 'false' }} && ${{ steps.set-comment-body.outputs.COMMENT_BODY }}
+        if: ${{ env.SKIP_ALL == 'false' }} && ${{ steps.set-comment-body.outputs.COMMENT_BODY != '' }}
         run: |
           echo "${{ steps.set-comment-body.outputs.COMMENT_BODY }}"
           gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body "${{ env.COMMIT_COMMENT_TAG }}
