@@ -104,16 +104,12 @@ jobs:
 
           main_history=$(git log --decorate --oneline origin/${{ steps.pull_request.outputs.BASE_REF }})
           feature_history=$(git log --decorate --oneline origin/${{ steps.pull_request.outputs.HEAD_REF }})
-          echo "$feature_history" | while read -r line; do
-            commit=$(echo "$line" | awk '{print $1}')
-            if ! grep -q "$commit" <<< "$main_history"; then
-              echo "New commit: $line"
-            else
-              echo "$line"
-              # Remove the line from main_history
-              main_history=$(grep -v "$commit" <<< "$main_history")
-            fi
-          done
+          echo "Main history:"
+          echo "$main_history"
+          echo "---------"
+          echo "Feature history:"
+          echo "$feature_history"
+          echo "---------"
 
           feature_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ steps.pull_request.outputs.BASE_REF }}..origin/${{ steps.pull_request.outputs.HEAD_REF }})
 
