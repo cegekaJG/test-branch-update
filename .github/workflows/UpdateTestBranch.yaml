@@ -99,30 +99,15 @@ jobs:
         id: get_feature_commits
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          main_history=$(git log --decorate --oneline origin/main)
-          feature_history=$(git log --decorate --oneline origin/feature)
-          echo "Before fetch:\nFeature history:\n"
-          echo "$feature_history" | while read -r line; do
-            commit=$(echo "$line" | awk '{print $1}')
-            if ! grep -q "$commit" <<< "$main_history"; then
-              echo "::warning::$line (not present in main history)"
-            else
-              echo "$line"
-              # Remove the line from main_history
-              main_history=$(grep -v "$commit" <<< "$main_history")
-            fi
-          done
-
           git fetch origin ${{ steps.pull_request.outputs.BASE_REF }}
           git fetch origin ${{ steps.pull_request.outputs.HEAD_REF }}
 
-          main_history=$(git log --decorate --oneline origin/main)
-          feature_history=$(git log --decorate --oneline origin/feature)
-          echo "Before fetch:\nFeature history:\n"
+          main_history=$(git log --decorate --oneline ${{ steps.pull_request.outputs.BASE_REF }})
+          feature_history=$(git log --decorate --oneline ${{ steps.pull_request.outputs.HEAD_REF }})
           echo "$feature_history" | while read -r line; do
             commit=$(echo "$line" | awk '{print $1}')
             if ! grep -q "$commit" <<< "$main_history"; then
-              echo "::warning::$line (not present in main history)"
+              echo "New commit: $line"
             else
               echo "$line"
               # Remove the line from main_history
