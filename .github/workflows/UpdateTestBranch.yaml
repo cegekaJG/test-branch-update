@@ -443,7 +443,8 @@ jobs:
           2) Resolve the merge conflicts and push the changes.
           3) Re-run the workflow by commenting `!update-test-branch` in ${{ github.event.issue.pull_request.html_url }} again.'
 
-          COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body '${{ env.NOTICE_COMMENT_TAG }}'"$body")
+          COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body '${{ env.NOTICE_COMMENT_TAG }}
+          '"$body")
           echo $COMMENT_URL
           echo "COMMENT_URL=$COMMENT_URL" >> $GITHUB_OUTPUT
 
@@ -459,4 +460,5 @@ jobs:
 
             A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ steps.comment_on_new_pr.outputs.COMMENT_URL }} for more details.'
           fi
-          gh pr comment ${{ github.event.issue.number }} --body '${{ env.NOTICE_COMMENT_TAG }}'"$body"
+          gh pr comment ${{ github.event.issue.number }} --body '${{ env.NOTICE_COMMENT_TAG }}
+          '"$body"
