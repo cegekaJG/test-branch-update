@@ -217,16 +217,16 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           echo 'Checking for existing comments with the tag "${{ env.COMMIT_COMMENT_TAG }}" in <${{ github.event.issue.html_url }}>...'
-          comments=$(gh pr view ${{ github.event.issue.number }} --json comments)
+          comments=$(gh pr view ${{ github.event.issue.number }} --json comments --jq '.comments')
           if [ -z "$comments" ]; then
             echo "No comments found in <${{ github.event.issue.html_url }}>."
             exit 0
           fi
           added_commits=()
-          for comment in $comments; do
+          echo "$comments" | jq -c '.[]' | while read -r comment; do
             author=$(echo "$comment" | jq -r '.author.login')
             body=$(echo "$comment" | jq -r '.body')
-            if [ "$author" == 'github-actions[bot]' ] && [[ '$body' == *'${{ env.COMMIT_COMMENT_TAG }}'* ]]; then
+            if [ $author == 'github-actions' ] && [[ $body == '<!-- UpdateTestBranch/NOTICE -->'* ]]; then
               echo 'Found comment with the tag "${{ env.COMMIT_COMMENT_TAG }}".'
               found_commits=$(echo "$body" | grep -oP '(?<=- )\S*')
               echo "Added commits:"
