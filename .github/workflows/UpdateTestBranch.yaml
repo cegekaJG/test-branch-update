@@ -170,7 +170,7 @@ jobs:
             commit=${last_line#CP:}
             echo "::debug::Commit: $commit"
             if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
-              commit=$($commit:0:7)
+              commit=${commit:0:7}
               picked_commits+=($commit)
             fi
           done
