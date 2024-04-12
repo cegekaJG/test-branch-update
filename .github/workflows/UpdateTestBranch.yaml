@@ -379,7 +379,7 @@ jobs:
             echo "::notice::$TEST_PR_URL created."
           else
             TEST_PR_URL=$(gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
-              --add-assignee ${{ github.event.issue.assignees.login }})
+              --add-assignee ${{ github.actor }})
             echo "::notice::$TEST_PR_URL updated."
           fi
           echo "TEST_PR_URL=$TEST_PR_URL" >> $GITHUB_ENV
