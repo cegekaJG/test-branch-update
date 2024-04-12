@@ -99,8 +99,37 @@ jobs:
         id: get_feature_commits
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
+          main_history=$(git log --decorate --oneline origin/main)
+          feature_history=$(git log --decorate --oneline origin/feature)
+          echo "Before fetch:\nFeature history:\n"
+          echo "$feature_history" | while read -r line; do
+            commit=$(echo "$line" | awk '{print $1}')
+            if ! grep -q "$commit" <<< "$main_history"; then
+              echo "::warning::$line (not present in main history)"
+            else
+              echo "$line"
+              # Remove the line from main_history
+              main_history=$(grep -v "$commit" <<< "$main_history")
+            fi
+          done
+
           git fetch origin ${{ steps.pull_request.outputs.BASE_REF }}
           git fetch origin ${{ steps.pull_request.outputs.HEAD_REF }}
+
+          main_history=$(git log --decorate --oneline origin/main)
+          feature_history=$(git log --decorate --oneline origin/feature)
+          echo "Before fetch:\nFeature history:\n"
+          echo "$feature_history" | while read -r line; do
+            commit=$(echo "$line" | awk '{print $1}')
+            if ! grep -q "$commit" <<< "$main_history"; then
+              echo "::warning::$line (not present in main history)"
+            else
+              echo "$line"
+              # Remove the line from main_history
+              main_history=$(grep -v "$commit" <<< "$main_history")
+            fi
+          done
+
           feature_commits=$(git log --reverse --no-merges --pretty=format:%h origin/${{ steps.pull_request.outputs.BASE_REF }}..origin/${{ steps.pull_request.outputs.HEAD_REF }})
 
           if [ -z "$feature_commits" ]; then
@@ -138,36 +167,8 @@ jobs:
         id: get_cherry_picked_commits
         if: ${{ env.SKIP_ALL == 'false' && steps.check_feat_test.outputs.SKIP_CHERRY_LIST == 'false' }}
         run: |
-          main_history=$(git log --decorate --oneline origin/main)
-          feature_history=$(git log --decorate --oneline origin/feature)
-          echo "Before fetch:\nFeature history:\n"
-          echo "$feature_history" | while read -r line; do
-            commit=$(echo "$line" | awk '{print $1}')
-            if ! grep -q "$commit" <<< "$main_history"; then
-              echo "::warning::$line (not present in main history)"
-            else
-              echo "$line"
-              # Remove the line from main_history
-              main_history=$(grep -v "$commit" <<< "$main_history")
-            fi
-          done
-
           git fetch origin ${{ env.TEST_BRANCH }}
           git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
-
-          main_history=$(git log --decorate --oneline origin/main)
-          feature_history=$(git log --decorate --oneline origin/feature)
-          echo "Before fetch:\nFeature history:\n"
-          echo "$feature_history" | while read -r line; do
-            commit=$(echo "$line" | awk '{print $1}')
-            if ! grep -q "$commit" <<< "$main_history"; then
-              echo "::warning::$line (not present in main history)"
-            else
-              echo "$line"
-              # Remove the line from main_history
-              main_history=$(grep -v "$commit" <<< "$main_history")
-            fi
-          done
 
           feature_test_bodies=$(git log --reverse --pretty=format:%b origin/${{ env.TEST_BRANCH }}..origin/${{ env.FEATURE_TEST_BRANCH }})
 
