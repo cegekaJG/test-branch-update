@@ -201,19 +201,21 @@ jobs:
           echo "$comments" | jq -c '.[]' | while read -r comment; do
             author=$(echo "$comment" | jq -r '.author.login')
             body=$(echo "$comment" | jq -r '.body')
-            if [ $author == 'github-actions' ] && [[ $body == '<!-- UpdateTestBranch/NOTICE -->'* ]]; then
+            if [ $author == 'github-actions' ] && [[ $body == '${{ env.COMMIT_COMMENT_TAG }}'* ]]; then
               echo 'Found comment with the tag "${{ env.COMMIT_COMMENT_TAG }}".'
-              found_commits=$(echo "$body" | grep -oP '(?<=- )\S*')
+              found_commits=$(echo "$body" | grep -oP '(?<=^- )\S*')
               echo "Added commits:"
               for commit in $found_commits; do
                 echo "- $commit"
               done
               added_commits+=($found_commits)
             fi
-          done
+          done < <(echo "$comments" | jq -c '.[]')
           {
             echo "ADDED_COMMITS<<EOF"
-            echo "$added_commits"
+            for commit in "${added_commits[@]}"; do
+              printf "%s\n" "$commit"
+            done
             echo "EOF"
           } >> $GITHUB_ENV
 
