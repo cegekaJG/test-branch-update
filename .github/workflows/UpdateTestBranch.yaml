@@ -277,12 +277,12 @@ jobs:
         id: cherry_pick
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          feature_commits="${{ env.FEATURE_COMMITS }}"
+          feature_commits=(${{ env.FEATURE_COMMITS }})
           echo "Cherry-picking the following commits:"
-          echo "$feature_commits"
+          echo "${feature_commits[*]}
           successful_commits=()
 
-          for commit in "$feature_commits"; do
+          for commit in "${feature_commits[@]}"; do
             message=$(git log --format=%s -n 1 $commit)
             message=$message'
 
@@ -426,8 +426,8 @@ jobs:
         id: comment_on_new_pr
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          missing_commits="${{ env.MISSING_COMMITS }}"
-          failed_commit=$(echo "$missing_commits" | head -n 1)
+          missing_commits=(${{ env.MISSING_COMMITS }})
+          failed_commit=$(echo "${missing_commits[0]}" | head -n 1)
           body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
 
           To manually resolve the merge conflicts, please follow these steps:

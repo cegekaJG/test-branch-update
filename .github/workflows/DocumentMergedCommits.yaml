@@ -107,7 +107,7 @@ jobs:
       - name: Get SHAs of original commits
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          picked_commits=""
+          picked_commits=()
           for commit in ${{ env.ADDED_COMMITS }}; do
             echo "- $commit:"
             commit_comment=$(git show -s --format=%B $commit)
@@ -115,11 +115,7 @@ jobs:
             commit_sha=$(echo "$commit_comment" | grep -oE '^\s*CP:.*$' | sed 's/^\s*CP:\(.\{7\}\).*/\1/')
             if [ -n "$commit_sha" ]; then
               echo "Found original commit $commit_sha."
-              if [ -n "$picked_commits" ]; then
-                picked_commits="$picked_commits $commit_sha"
-              else
-                picked_commits="$commit_sha"
-              fi
+              picked_commits+=("$commit_sha")
             else
               echo "No commit found."
             fi
@@ -127,9 +123,15 @@ jobs:
 
           if [ -n "$picked_commits" ]; then
             echo "Original commits:"
-            echo "$picked_commits"
+            echo "${picked_commits[@]}"
 
-            echo "PICKED_COMMITS=$picked_commits" >> $GITHUB_ENV
+            {
+              echo "PICKED_COMMITS<<EOF"
+              for commit in "${picked_commits[@]}"; do
+                echo "$commit"
+              done
+              echo "EOF"
+            } >> $GITHUB_ENV
           else
             echo "No original commits found."
           fi
@@ -161,12 +163,12 @@ jobs:
         id: set-comment-body
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          picked_commits='${{ env.PICKED_COMMITS }}'
+          picked_commits=(${{ env.PICKED_COMMITS }})
           if [ -n "$picked_commits" ]; then
             body='${{ github.event.pull_request.html_url }} merged the following commits from `${{ env.FEATURE_BRANCH }}` into `${{ github.head_ref }}`:
 
           '
-            for commit in "$picked_commits"; do
+            for commit in "${picked_commits[@]}"; do
               body="$body- $commit
           "
             done
