@@ -70,17 +70,17 @@ jobs:
           prs_json=$(gh pr list --json headRefName,number)
           printf "::debug::PR info: %q\n" "$pr_info"
 
-          feature_pr_json=$(echo $prs_json | jq --arg feature_branch "${{ env.FEATURE_BRANCH }}" '.[] | select(.headRefName == $feature_branch)')
+          feature_pr_json=$(echo "$prs_json" | jq --arg feature_branch "${{ env.FEATURE_BRANCH }}" '.[] | select(.headRefName == $feature_branch)')
           if [ -z "$feature_pr_json" ]; then
           echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::error::Unable to find PR with head ref ${{ env.FEATURE_BRANCH }}."
             exit 1
           fi
-          feature_pr_number=$(echo $feature_pr_json | jq '.number')
+          feature_pr_number=$(echo "$feature_pr_json" | jq '.number')
           if [ -n "$feature_pr_number" ]; then
             echo "FEATURE_PR_NUMBER=$feature_pr_number" >> $GITHUB_ENV
           else
-            echo $feature_pr_json
+            echo "$feature_pr_json"
             echo "::error::Unable to extract PR number from JSON response."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             exit 1
