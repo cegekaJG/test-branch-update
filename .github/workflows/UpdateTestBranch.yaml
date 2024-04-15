@@ -228,12 +228,8 @@ jobs:
           added_commits=(${{ env.ADDED_COMMITS }})
 
           echo -e 'Feature commits: '"${feature_commits[*]}"
-          if [ -n "$picked_commits" ]; then
-            echo -e 'Picked commits: '"${picked_commits[*]}"
-          fi
-          if [ -n "$added_commits" ]; then
-            echo -e 'Added commits: '"${added_commits[*]}"
-          fi
+          echo -e 'Picked commits: '"${picked_commits[*]:-None}"
+          echo -e 'Added commits: '"${added_commits[*]:-None}"
 
           new_commits=()
           if [ -z "$picked_commits" ] && [ -z "$added_commits" ]; then
@@ -249,7 +245,7 @@ jobs:
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits to cherry-pick found. Skipping update."
           else
-            echo 'New commits:"
+            echo "New commits:"
             for commit in "${new_commits[@]}"; do
               echo "- $commit"
             done
