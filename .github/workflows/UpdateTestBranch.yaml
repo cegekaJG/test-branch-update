@@ -36,6 +36,8 @@ jobs:
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: 'Setup jq'
         if: ${{ env.SKIP_ALL == 'false' }}
