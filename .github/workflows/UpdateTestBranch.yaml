@@ -156,7 +156,7 @@ jobs:
             echo "::debug::Full message: $msg"
             last_line=$(echo "$msg" | tail -n 1)
             echo "::debug::Last line: $last_line"
-            if [[ $last_line != CP:* ]]; then
+            if [[ $last_line != "CP:"* ]]; then
               continue
             fi
 
@@ -174,16 +174,17 @@ jobs:
           fi
 
           echo "Cherry-picked commits:"
-
-          for commit in $picked_commits; do
+          for commit in "${picked_commits[@]}"; do
             commit_message=$(git log --format=%s -n 1 $commit)
-            echo "$(git log --pretty=format:"- %s ($H)" -n 1 $commit)"
+            echo "$(git log --pretty=format:"- %s (%H)" -n 1 $commit)"
             echo "::debug::$commit"
           done
 
           {
             echo "PICKED_COMMITS<<EOF"
-            echo "$picked_commits"
+            for commit in "${picked_commits[@]}"; do
+              printf "%s\n" "$commit"
+            done
             echo "EOF"
           } >> $GITHUB_ENV
 
@@ -248,12 +249,17 @@ jobs:
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits to cherry-pick found. Skipping update."
           else
-            echo 'New commits: '"${new_commits[*]}"
+            echo 'New commits:"
+            for commit in "${new_commits[@]}"; do
+              echo "- $commit"
+            done
           fi
 
           {
             echo "FEATURE_COMMITS<<EOF"
-            echo "${new_commits[*]}"
+            for commit in "${new_commits[@]}"; do
+              printf "%s\n" "$commit"
+            done
             echo "EOF"
           } >> $GITHUB_ENV
 
