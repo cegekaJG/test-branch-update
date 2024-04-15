@@ -277,11 +277,12 @@ jobs:
         id: cherry_pick
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
+          feature_commits="${{ env.FEATURE_COMMITS }}"
           echo "Cherry-picking the following commits:"
-          echo "${{ env.FEATURE_COMMITS }}"
+          echo "$feature_commits"
           successful_commits=()
 
-          for commit in ${{ env.FEATURE_COMMITS }}; do
+          for commit in "$feature_commits"; do
             message=$(git log --format=%s -n 1 $commit)
             message=$message'
 
@@ -425,7 +426,8 @@ jobs:
         id: comment_on_new_pr
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
         run: |
-          failed_commit=$(echo "$MISSING_COMMITS" | head -n 1)
+          missing_commits="${{ env.MISSING_COMMITS }}"
+          failed_commit=$(echo "$missing_commits" | head -n 1)
           body='**Automatic ${{ env.TEST_BRANCH }} update failed.**
 
           To manually resolve the merge conflicts, please follow these steps:
@@ -442,7 +444,7 @@ jobs:
 
           COMMENT_URL=$(gh pr comment ${{ env.TEST_PR_URL }} --body '${{ env.NOTICE_COMMENT_TAG }}
           '"$body")
-          echo $COMMENT_URL
+          echo "$COMMENT_URL"
           echo "COMMENT_URL=$COMMENT_URL" >> $GITHUB_OUTPUT
 
       - name: Comment on the original pull request
