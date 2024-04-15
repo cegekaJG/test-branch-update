@@ -161,11 +161,12 @@ jobs:
         id: set-comment-body
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          if [ -n "${{ env.PICKED_COMMITS }}" ]; then
+          picked_commits='${{ env.PICKED_COMMITS }}'
+          if [ -n "$picked_commits" ]; then
             body='${{ github.event.pull_request.html_url }} merged the following commits from `${{ env.FEATURE_BRANCH }}` into `${{ github.head_ref }}`:
 
           '
-            for commit in ${{ env.PICKED_COMMITS }}; do
+            for commit in "$picked_commits"; do
               body="$body- $commit
           "
             done
@@ -187,8 +188,8 @@ jobs:
             exit 0
           fi
           echo "${{ steps.set-comment-body.outputs.COMMENT_BODY }}"
-          gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body "${{ env.COMMIT_COMMENT_TAG }}
-          ${{ steps.set-comment-body.outputs.COMMENT_BODY }}"
+          gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
+          ${{ steps.set-comment-body.outputs.COMMENT_BODY }}'
 
   delete-head:
     name: Delete head branch
