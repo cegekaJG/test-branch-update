@@ -101,8 +101,6 @@ jobs:
         run: |
           git fetch origin ${{ steps.pull_request.outputs.BASE_REF }}
           git fetch origin ${{ steps.pull_request.outputs.HEAD_REF }}
-          git pull origin ${{ steps.pull_request.outputs.BASE_REF }}
-          git pull origin ${{ steps.pull_request.outputs.HEAD_REF }}
 
           main_history=$(git log --all --decorate --oneline origin/${{ steps.pull_request.outputs.BASE_REF }})
           feature_history=$(git log --all --decorate --oneline origin/${{ steps.pull_request.outputs.HEAD_REF }})
