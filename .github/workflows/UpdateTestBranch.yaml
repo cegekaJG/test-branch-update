@@ -193,24 +193,32 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           echo 'Checking for existing comments with the tag "${{ env.COMMIT_COMMENT_TAG }}" in <${{ github.event.issue.html_url }}>...'
-          comments=$(gh pr view ${{ github.event.issue.number }} --json comments --jq '.comments')
-          if [ -z "$comments" ]; then
+          comments_json=$(gh pr view ${{ github.event.issue.number }} --json comments)
+          if [ -z "$comments_json" ]; then
             echo "No comments found in <${{ github.event.issue.html_url }}>."
             exit 0
           fi
           added_commits=()
-          echo "$comments" | jq -c '.[]' | while read -r comment; do
+          readarray -t comments < <(echo $comments_json | jq -c '.comments[]')
+          for comment in "${comments[@]}"; do
             body=$(echo "$comment" | jq -r '.body')
             if [[ $body == '${{ env.COMMIT_COMMENT_TAG }}'* ]]; then
               echo 'Found comment with the tag "${{ env.COMMIT_COMMENT_TAG }}".'
               found_commits=$(echo "$body" | grep -oP '(?<=^- )\S*')
-              echo "Added commits:"
+              echo "Commits in comment:"
               for commit in $found_commits; do
                 echo "- $commit"
               done
+              echo ""
               added_commits+=($found_commits)
             fi
-          done < <(echo "$comments" | jq -c '.[]')
+          done
+
+          echo "Added commits:"
+          for commit in "${added_commits[@]}"; do
+            echo "- $commit"
+          done
+
           {
             echo "ADDED_COMMITS<<EOF"
             for commit in "${added_commits[@]}"; do
