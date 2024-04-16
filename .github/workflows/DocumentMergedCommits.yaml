@@ -186,7 +186,7 @@ jobs:
       - name: Comment on the original pull request
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          if [ -z ${{ steps.set-comment-body.outputs.COMMENT_BODY }} ]; then
+          if [ -z "${{ steps.set-comment-body.outputs.COMMENT_BODY }}" ]; then
             echo "No commits to document."
             exit 0
           fi
