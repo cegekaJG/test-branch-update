@@ -94,7 +94,7 @@ jobs:
           added_commits=$(git log --no-merges --pretty=format:%h ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
 
           echo "Non-merge commits added:"
-          for commit in $added_commits; do
+          for commit in "$added_commits"; do
             echo "- $commit"
           done
 
@@ -108,7 +108,8 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           picked_commits=()
-          for commit in ${{ env.ADDED_COMMITS }}; do
+          added_commits=(${{ env.ADDED_COMMITS }})
+          for commit in "${added_commits[@]}"; do
             echo "- $commit:"
             commit_comment=$(git show -s --format=%B $commit)
             echo "$commit_comment"
