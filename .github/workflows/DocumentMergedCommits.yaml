@@ -94,7 +94,7 @@ jobs:
           added_commits=$(git log --no-merges --pretty=format:%h ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
 
           echo "Non-merge commits added:"
-          for commit in "$added_commits"; do
+          for commit in $added_commits; do
             echo "- $commit"
           done
 
