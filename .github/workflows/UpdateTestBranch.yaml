@@ -115,7 +115,7 @@ jobs:
           feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" origin/${{ steps.pull_request.outputs.BASE_REF }}..origin/${{ steps.pull_request.outputs.HEAD_REF }})
 
           echo -e 'Feature commits:\n'"$feature_commits_pretty"
-          for commit in $feature_commits; do
+          for commit in "$feature_commits"; do
             echo "::debug::$commit"
           done
 
@@ -152,7 +152,7 @@ jobs:
           fi
 
           picked_commits=()
-          for msg in $feature_test_bodies; do
+          for msg in "$feature_test_bodies"; do
             echo "::debug::Full message: $msg"
             last_line=$(echo "$msg" | tail -n 1)
             echo "::debug::Last line: $last_line"
@@ -200,13 +200,12 @@ jobs:
           fi
           added_commits=()
           echo "$comments" | jq -c '.[]' | while read -r comment; do
-            author=$(echo "$comment" | jq -r '.author.login')
             body=$(echo "$comment" | jq -r '.body')
-            if [ $author == 'github-actions' ] && [[ $body == '${{ env.COMMIT_COMMENT_TAG }}'* ]]; then
+            if [[ $body == '${{ env.COMMIT_COMMENT_TAG }}'* ]]; then
               echo 'Found comment with the tag "${{ env.COMMIT_COMMENT_TAG }}".'
               found_commits=$(echo "$body" | grep -oP '(?<=^- )\S*')
               echo "Added commits:"
-              for commit in $found_commits; do
+              for commit in "$found_commits"; do
                 echo "- $commit"
               done
               added_commits+=($found_commits)
