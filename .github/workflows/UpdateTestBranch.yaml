@@ -279,7 +279,7 @@ jobs:
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
           echo "Cherry-picking the following commits:"
-          echo "${feature_commits[*]}
+          echo "${feature_commits[*]}"
           successful_commits=()
 
           for commit in "${feature_commits[@]}"; do
