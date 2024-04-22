@@ -288,6 +288,7 @@ jobs:
           echo "Cherry-picking the following commits:"
           echo "${feature_commits[*]}"
           successful_commits=()
+          success=true
 
           for commit in "${feature_commits[@]}"; do
             message=$(git log --format=%s -n 1 $commit)
@@ -296,19 +297,25 @@ jobs:
           CP:'$commit
             git cherry-pick --allow-empty $commit 1>/dev/null || true
             if [ -n "$(git status --porcelain | grep '^U')" ]; then
-              echo '::error::Cherry-pick failed. Please see ${{ github.event.issue.pull_request.html_url }} for more details.'
-              exit 1
+              $success=false
+              break
             fi
             git commit --amend -m "$message"
             successful_commits+=($commit)
           done
-          echo "Cherry-pick successful."
 
           {
             echo "PICKED_COMMITS<<EOF"
             echo "${successful_commits[*]}"
             echo "EOF"
           } >> $GITHUB_ENV
+
+          if [ $success == false ]; then
+            echo '::error::Cherry-pick failed. Please see ${{ github.event.issue.pull_request.html_url }} for more details.'
+            exit 1
+          else
+            echo "Cherry-pick successful."
+          fi
 
       - name: "On success: Commit & push cherry-picked changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'success' }}
