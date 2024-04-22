@@ -294,7 +294,7 @@ jobs:
             message=$message'
 
           CP:'$commit
-            git cherry-pick $commit 1>/dev/null || true
+            git cherry-pick --allow-empty $commit 1>/dev/null || true
             if [ -n "$(git status --porcelain | grep '^U')" ]; then
               echo '::error::Cherry-pick failed. Please see ${{ github.event.issue.pull_request.html_url }} for more details.'
               exit 1
