@@ -156,11 +156,10 @@ jobs:
             echo "::debug::Full message: $msg"
             last_line=$(echo "$msg" | tail -n 1)
             echo "::debug::Last line: $last_line"
-            if [[ $last_line != "CP:"* ]]; then
+            commit=$(echo "$body" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))')
+            if [[ -z "$commit" ]]; then
               continue
             fi
-
-            commit=${last_line#CP:}
             echo "::debug::Commit: $commit"
             if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
               commit=${commit:0:7}
@@ -291,16 +290,11 @@ jobs:
           success=true
 
           for commit in "${feature_commits[@]}"; do
-            message=$(git log --format=%s -n 1 $commit)
-            message=$message'
-
-          CP:'$commit
-            git cherry-pick --allow-empty $commit 1>/dev/null || true
+            git cherry-pick --allow-empty -x $commit 1>/dev/null || true
             if [ -n "$(git status --porcelain | grep '^U')" ]; then
               $success=false
               break
             fi
-            git commit --amend -m "$message"
             successful_commits+=($commit)
           done
 
@@ -451,7 +445,7 @@ jobs:
           git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
           git checkout ${{ env.FEATURE_TEST_BRANCH }}
           git pull origin ${{ env.FEATURE_TEST_BRANCH }}
-          git cherry-pick '"$failed_commit"'
+          git cherry-pick -x '"$failed_commit"'
           ```
           2) Resolve the merge conflicts and push the changes.
           3) Re-run the workflow by commenting `!update-test-branch` in ${{ github.event.issue.pull_request.html_url }} again.'
