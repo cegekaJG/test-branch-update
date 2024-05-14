@@ -34,6 +34,12 @@ jobs:
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Add reaction to comment
+        if: ${{ env.SKIP_ALL == 'false' }}
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
         uses: actions/checkout@v4
