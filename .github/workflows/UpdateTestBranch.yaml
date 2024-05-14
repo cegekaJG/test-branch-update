@@ -38,7 +38,8 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         uses: peter-evans/create-or-update-comment@v4
         with:
-          issue-number: ${{ github.event.issue.number }}
+          comment-id: ${{ github.event.comment.id }}
+          reactions: rocket
 
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
