@@ -519,9 +519,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ env.NO_CHANGES }}" == "true"]; then
-            body='No new commits found. Skipping update.'
-          elif [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
+          if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body='The cherry-picked changes from `${{ steps.pull_request.outputs.HEAD_REF }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
 
             A new pull request has been created to test the changes. See ${{ env.TEST_PR_URL }} for more details.'
