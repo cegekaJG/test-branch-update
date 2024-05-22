@@ -305,9 +305,9 @@ jobs:
         run: |
           $feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
           $test_branch=${{ env.TEST_BRANCH }}
+          git fetch origin $test_branch
 
-          if [ -z "$(git ls-remote --heads origin $feature_test_branch)" ]; then
-            git fetch origin $test_branch
+          if [ -z "$(git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$" ]; then
             git checkout $test_branch
             git checkout -b $feature_test_branch
           else
