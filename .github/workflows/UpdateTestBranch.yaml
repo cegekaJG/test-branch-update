@@ -18,6 +18,7 @@ env:
   FEATURE_COMMITS: ''
   PICKED_COMMITS: ''
   ADDED_COMMITS: ''
+  NO_CHANGES: false
   MISSING_COMMITS: ''
   TEST_PR_URL: ''
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -296,14 +297,16 @@ jobs:
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          git fetch origin ${{ env.TEST_BRANCH }}
-          if [ -z "$(git ls-remote --heads origin ${{ env.FEATURE_TEST_BRANCH }})" ]; then
-            git checkout ${{ env.TEST_BRANCH }}
-            git checkout -b ${{ env.FEATURE_TEST_BRANCH }}
-            git push origin ${{ env.FEATURE_TEST_BRANCH }}
+          $feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
+          $test_branch=${{ env.TEST_BRANCH }}
+
+          if [ -z "$(git ls-remote --heads origin $feature_test_branch)" ]; then
+            git fetch origin $test_branch
+            git checkout $test_branch
+            git checkout -b $feature_test_branch
           else
-            git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
-            git checkout ${{ env.FEATURE_TEST_BRANCH }}
+            git fetch origin $feature_test_branch
+            git checkout $feature_test_branch
           fi
 
       - name: Cherry-pick new commits
@@ -316,16 +319,23 @@ jobs:
           echo "${feature_commits[*]}"
           successful_commits=()
           success=true
+          no_changes=false
 
           for commit in "${feature_commits[@]}"; do
-            git cherry-pick --allow-empty -x $commit 1>/dev/null || true
+            git cherry-pick --empty=keep -x $commit 1>/dev/null || true
             if [ -n "$(git status --porcelain | grep '^U')" ]; then
-              $success=false
+              success=false
               break
             fi
             successful_commits+=($commit)
+            commit_id=$(git rev-parse HEAD)
+            if git diff --quiet $commit_id^ $commit_id
+            then
+              no_changes=false
+            fi
           done
 
+          echo "NO_CHANGES=$no_changes" >> $GITHUB_ENV
           {
             echo "PICKED_COMMITS<<EOF"
             echo "${successful_commits[*]}"
@@ -349,10 +359,11 @@ jobs:
       - name: "On success: Commit & push cherry-picked changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'success' }}
         run: |
+          $successful_commits=(${{ env.PICKED_COMMITS }})
           if [ -n "$(git status --porcelain)" ]; then
             git commit
           fi
-          if [ -n "$(git log origin/${{ env.FEATURE_TEST_BRANCH }}..${{ env.FEATURE_TEST_BRANCH }})" ]; then
+          if [ ${{ env.NO_CHANGES }} == 'false' ]; then
             git push origin ${{ env.FEATURE_TEST_BRANCH }}
           else
             echo "No new commits to push."
@@ -395,7 +406,7 @@ jobs:
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
       - name: Ensure bot label exists
-        if: ${{ env.SKIP_ALL == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
         run: |
           if [ -z "$(gh label list --search "${{ env.BOT_LABEL }}" --limit 1)" ]; then
             gh label create ${{ env.BOT_LABEL }} --color CCCCCC --description "Automated pull requests"
@@ -403,7 +414,7 @@ jobs:
           fi
 
       - name: Create/Update pull request
-        if: ${{ env.SKIP_ALL == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
         run: |
           feature_title=$(printf '%s' '${{ github.event.issue.title }}')
           echo "Old PR title: $feature_title"
@@ -426,7 +437,7 @@ jobs:
           echo "TEST_PR_URL=$TEST_PR_URL" >> $GITHUB_ENV
 
       - name: Set pull request status
-        if: ${{ env.SKIP_ALL == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
         run: |
           if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             gh pr ready ${{ env.FEATURE_TEST_BRANCH }}
@@ -469,7 +480,7 @@ jobs:
 
       - name: Comment on the new pull request
         id: comment_on_new_pr
-        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' && env.DISABLE_COMMENTS == 'false' &&  env.NO_CHANGES == 'false' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -499,7 +510,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
+          if [ "${{ env.NO_CHANGES }}" == "true"]; then
+            body='No new commits found. Skipping update.'
+          elif [ "${{ steps.cherry_pick.outcome }}" == "success" ]; then
             body='The cherry-picked changes from `${{ steps.pull_request.outputs.HEAD_REF }}` are ready to be added to the `${{ env.TEST_BRANCH }}` branch.
 
             A new pull request has been created to test the changes. See ${{ env.TEST_PR_URL }} for more details.'
