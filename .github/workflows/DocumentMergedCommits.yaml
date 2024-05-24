@@ -193,7 +193,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          comment_body="${{ steps.set-comment-body.outputs.COMMENT_BODY}}"
+          read -r -d '' comment_body << EOM
+          ${{ steps.set-comment-body.outputs.COMMENT_BODY }}
+          EOM
           if [ -z "$comment_body" ]; then
             echo "No commits to document."
             exit 0
