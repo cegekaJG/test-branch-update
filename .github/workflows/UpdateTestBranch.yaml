@@ -157,7 +157,7 @@ jobs:
         id: check_feat_test
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          $feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
+          feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
           if [ -z "$(git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$" ]; then
             echo "No branch $feature_test_branch found."
             echo "SKIP_CHERRY_LIST=true" >> $GITHUB_OUTPUT
@@ -170,8 +170,8 @@ jobs:
         id: get_cherry_picked_commits
         if: ${{ env.SKIP_ALL == 'false' && steps.check_feat_test.outputs.SKIP_CHERRY_LIST == 'false' }}
         run: |
-          $test_branch=${{ env.TEST_BRANCH }}
-          $feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
+          test_branch=${{ env.TEST_BRANCH }}
+          feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
           git fetch origin $test_branch
           git fetch origin $feature_test_branch
 
@@ -303,8 +303,8 @@ jobs:
       - name: Create/Checkout ${{ env.FEATURE_TEST_BRANCH }}
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          $feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
-          $test_branch=${{ env.TEST_BRANCH }}
+          feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
+          test_branch=${{ env.TEST_BRANCH }}
           git fetch origin $test_branch
 
           if [ -z "$(git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$" ]; then
