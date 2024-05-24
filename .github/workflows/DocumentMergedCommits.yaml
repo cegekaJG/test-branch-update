@@ -200,9 +200,9 @@ jobs:
             echo "No commits to document."
             exit 0
           fi
-          echo "$comment_body"
+          echo $comment_body
           gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
-          $comment_body'
+          '"$comment_body"
 
   delete-head:
     name: Delete head branch
