@@ -175,18 +175,17 @@ jobs:
           git fetch origin $test_branch
           git fetch origin $feature_test_branch
 
-          commit_separator='---COMMIT---'
-          feature_test_bodies=$(git log --reverse --pretty=format:"%b$commit_separator" origin/$test_branch..origin/$feature_test_branch)
+          commit_separator=$'\001'
+          feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" origin/$test_branch..origin/$feature_test_branch)
 
           if [ -z "$feature_test_bodies" ]; then
-            echo "::notice::No new commits in $feature_test_branch found."
+            echo "::notice::No new commits in \"$feature_test_branch\" found."
           fi
 
           picked_commits=()
-          old_IFS=$IFS
-          IFS=(echo $commit_separator)
+          IFS=$commit_separator
           for msg in $feature_test_bodies; do
-            msg=${msg%$'\n'"$commit_separator"}
+            msg=${msg%$'\n'}
             echo "::debug::Full message: $msg"
             last_line=$(echo "$msg" | tail -n 1)
             echo "::debug::Last line: $last_line"
@@ -198,12 +197,14 @@ jobs:
             if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
               commit=${commit:0:7}
               picked_commits+=("$commit")
+            else
+              echo "::debug::Commit $commit not found in the repository."
             fi
           done
-          IFS=$old_IFS
+          unset IFS
 
           if [ -z "$picked_commits" ]; then
-            echo '::notice::No cherry-picked commits in "${{ env.FEATURE_TEST_BRANCH }}" found.'
+            echo "::notice::No cherry-picked commits in \"$feature_test_branch\" found."
             exit 0
           fi
 
