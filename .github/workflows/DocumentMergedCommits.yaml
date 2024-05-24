@@ -197,7 +197,7 @@ jobs:
             echo "No commits to document."
             exit 0
           fi
-          echo ${{ steps.set-comment-body.outputs.COMMENT_BODY }}
+          echo '${{ steps.set-comment-body.outputs.COMMENT_BODY }}'
           gh pr comment ${{ env.FEATURE_PR_NUMBER }} --body '${{ env.COMMIT_COMMENT_TAG }}
           ${{ steps.set-comment-body.outputs.COMMENT_BODY }}'
 
