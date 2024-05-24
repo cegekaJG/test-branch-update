@@ -158,7 +158,7 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
-          if [ -z "$(git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$" ]; then
+          if [ -z "$(git ls-remote --heads origin | grep "refs/heads/$feature_test_branch$")" ]; then
             echo "No branch $feature_test_branch found."
             echo "SKIP_CHERRY_LIST=true" >> $GITHUB_OUTPUT
           else
