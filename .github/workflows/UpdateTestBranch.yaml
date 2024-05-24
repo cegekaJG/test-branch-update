@@ -103,12 +103,12 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           if [ "${{ steps.pull_request.outputs.HEAD_REF }}" == "${{ env.TEST_BRANCH }}" ]; then
-            echo "::error::You cannot update the test branch `${{ env.TEST_BRANCH }}` with itself."
+            echo "::error::You cannot update the test branch \`${{ env.TEST_BRANCH }}\` with itself."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             exit 1
           fi
           if [ "${{ steps.pull_request.outputs.BASE_REF }}" == ${{ env.TEST_BRANCH }} ]; then
-            echo "::error::The pull request ${{ github.event.issue.pull_request.html_url }} is already targeting the test branch `${{ env.TEST_BRANCH }}`."
+            echo "::error::The pull request ${{ github.event.issue.pull_request.html_url }} is already targeting the test branch \`${{ env.TEST_BRANCH }}\`."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             exit 1
           fi
