@@ -429,7 +429,7 @@ jobs:
         run: |
           feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
           test_branch=${{ env.TEST_BRANCH }}
-          if [ -n "$(gh pr list --base $test_branch --head $feature_test_branch --state open | wc -l)" ]; then
+          if [ $(gh pr list --base $test_branch --head $feature_test_branch --state open | wc -l) -gt 0 ]; then
             echo "PR already exists."
             echo "NO_CHANGES=false" >> $GITHUB_ENV
             echo "PR_EXISTS=true" >> $GITHUB_OUTPUT
