@@ -116,7 +116,7 @@ jobs:
       - name: Check if ${{ env.TEST_BRANCH }} exists
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
-          $test_branch=${{ env.TEST_BRANCH }}
+          test_branch=${{ env.TEST_BRANCH }}
           if [ -z "$(git ls-remote --heads origin | grep -q "refs/heads/$test_branch$" ]; then
             echo "::error::Branch $test_branch does not exist. Please create the branch or define a custom name by editing the repository variable 'UPDATETESTBRANCH_TEST_BRANCH' and try again."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
