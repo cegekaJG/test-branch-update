@@ -117,7 +117,7 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           test_branch=${{ env.TEST_BRANCH }}
-          if git ls-remote --heads origin | grep -q "refs/heads/$test_branch$"; then
+            if ! git ls-remote --heads origin | grep -q "refs/heads/$test_branch$"; then
             echo "::error::Branch $test_branch does not exist. Please create the branch or define a custom name by editing the repository variable 'UPDATETESTBRANCH_TEST_BRANCH' and try again."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             exit 1
@@ -159,11 +159,11 @@ jobs:
         run: |
           feature_test_branch=${{ env.FEATURE_TEST_BRANCH }}
           if git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$"; then
-            echo "No branch $feature_test_branch found."
-            echo "SKIP_CHERRY_LIST=true" >> $GITHUB_OUTPUT
-          else
             echo "Branch $feature_test_branch found."
             echo "SKIP_CHERRY_LIST=false" >> $GITHUB_OUTPUT
+          else
+            echo "No branch $feature_test_branch found."
+            echo "SKIP_CHERRY_LIST=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Get list of already cherry-picked commits
@@ -308,11 +308,11 @@ jobs:
           git fetch origin $test_branch
 
           if git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$"; then
-            git checkout $test_branch
-            git checkout -b $feature_test_branch
-          else
             git fetch origin $feature_test_branch
             git checkout $feature_test_branch
+          else
+            git checkout $test_branch
+            git checkout -b $feature_test_branch
           fi
 
       - name: Cherry-pick new commits
