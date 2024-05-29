@@ -186,7 +186,12 @@ jobs:
           IFS=$commit_separator
           for msg in $feature_test_bodies; do
             msg=${msg%$'\n'}
-            echo "::debug::Full message: $msg"
+            echo "::debug::Full message:"
+            unset IFS
+            while IFS= read -r line; do
+              echo "::debug::$line"
+            done <<< "$msg"
+            IFS=$commit_separator
             last_line=$(echo "$msg" | tail -n 1)
             echo "::debug::Last line: $last_line"
             commit=$(echo "$last_line" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))')
@@ -197,16 +202,12 @@ jobs:
             if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
               commit=${commit:0:7}
               picked_commits+=("$commit")
+              echo "::debug::Commit $commit found."
             else
               echo "::debug::Commit $commit not found in the repository."
             fi
           done
           unset IFS
-
-          if [ -z "$picked_commits" ]; then
-            echo "::notice::No cherry-picked commits in \"$feature_test_branch\" found."
-            exit 0
-          fi
 
           echo "Cherry-picked commits:"
           for commit in $picked_commits; do
