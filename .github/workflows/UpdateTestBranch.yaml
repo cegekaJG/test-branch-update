@@ -420,7 +420,8 @@ jobs:
           if [ -z "$(git log origin/$feature_test_branch..$feature_test_branch)" ]; then
             echo "Pushing empty commit to $feature_test_branch to create PR."
             git commit --allow-empty -m 'Cherry-pick of `${{ steps.pull_request.outputs.HEAD_REF }}` failed.
-            Manual resolution required.'
+
+          Manual resolution required.'
           fi
           git push origin $feature_test_branch
 
