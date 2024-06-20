@@ -77,24 +77,18 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           feature_branch="${{ env.FEATURE_BRANCH }}"
-          prs_json=$(gh pr list --json headRefName,number)
-          printf "::debug::PR info: %q\n" "$pr_info"
-
-          feature_pr_json=$(echo "$prs_json" | jq --arg feature_branch "$feature_branch" '.[] | select(.headRefName == $feature_branch)')
-          if [ -z "$feature_pr_json" ]; then
-          echo "SKIP_ALL=true" >> $GITHUB_ENV
+          pr_json=$(gh pr view $feature_branch --json title,number 2>/dev/null)
+          if [ $? != 0 ]; then
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::error::Unable to find PR with head ref $feature_branch."
             exit 1
           fi
-          feature_pr_number=$(echo "$feature_pr_json" | jq '.number')
-          if [ -n "$feature_pr_number" ]; then
-            echo "FEATURE_PR_NUMBER=$feature_pr_number" >> $GITHUB_ENV
-          else
-            echo "$feature_pr_json"
-            echo "::error::Unable to extract PR number from JSON response."
-            echo "SKIP_ALL=true" >> $GITHUB_ENV
-            exit 1
-          fi
+
+          pr_number=$(echo "$pr_json" | jq '.number')
+          pr_title=$(echo "$pr_json" | jq -r '.title' | tr -dc 'A-Za-z0-9 ')
+
+          echo "FEATURE_PR_NUMBER=$pr_number" >> $GITHUB_ENV
+          echo "Feature PR: #$pr_number - $pr_title"
 
       - name: Get newly added commits
         id: list-commits
