@@ -179,7 +179,7 @@ jobs:
           "
             done
             body="$body"'
-          This list contains all commits that were successfully squash merged into '${{ github.base_ref }}' by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
+          This list contains all cherry-picked commits that were successfully squash merged into '${{ github.base_ref }}' by ${{ github.event.pull_request.html_url }}. To ensure the update workflow is working as expected, please do not remove or add any commits to this comment.'
             echo -e "$body"
             {
               echo "COMMENT_BODY<<EOF"
