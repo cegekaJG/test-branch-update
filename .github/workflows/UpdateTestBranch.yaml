@@ -421,6 +421,7 @@ jobs:
           Manual resolution required.'
           fi
           git push origin $feature_test_branch
+          echo "NO_CHANGES=false" >> $GITHUB_ENV
 
       - name: Look for existing update PR
         id: check_existing_pr
