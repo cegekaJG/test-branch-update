@@ -27,7 +27,7 @@ permissions:
 
 env:
   TEST_BRANCH_PREFIX: "test/scenario"
-  FEATURE_BRANCH_PREFIX: "feature/test"
+  FEATURE_BRANCH_PREFIX: "test-feature"
   FEATURE_TEST_PREFIX: "test/"
   BOT_LABEL: "Automated"
   SCENARIO_ID: ${{ github.run_number }}
