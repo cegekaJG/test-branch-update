@@ -54,6 +54,37 @@ The core `UpdateTestBranchCore` workflow can also be triggered manually:
 
 This allows direct testing of the cherry-picking logic without PR comments.
 
+### Example: Using Core Workflow from Another Workflow
+
+```yaml
+name: My Custom Workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update_test_branches:
+    name: Update Multiple Test Branches
+    uses: ./.github/workflows/UpdateTestBranchCore.yaml
+    with:
+      test_branch: "test/staging"
+      feature_branch: "feature/my-feature" 
+      base_branch: "main"
+      feature_test_prefix: "test/"
+      bot_label: "Automated"
+      use_github_token: true
+    secrets:
+      GHTOKENWORKFLOW: ${{ secrets.GHTOKENWORKFLOW }}
+```
+
+### Example: Calling Core Workflow with Different Parameters
+
+The core workflow supports various configurations:
+- **Different test branches**: `test/main`, `test/staging`, `test/develop`
+- **Custom prefixes**: `test/`, `staging/`, `qa/`
+- **Multiple token types**: GitHub Token or custom workflow token
+- **Custom labels**: `Automated`, `Test`, `Bot`, etc.
+
 #### What Gets Tested
 
 - ✅ Correct commit detection and cherry-picking
@@ -92,3 +123,5 @@ Comprehensive test scenario generator for validating UpdateTestBranch functional
 ✅ **Testability**: Core workflow can be tested independently with specific inputs  
 ✅ **Maintainability**: Cleaner separation of concerns  
 ✅ **Backward Compatibility**: Existing `!update-test` comments still work  
+✅ **Security**: Fixed critical code injection vulnerabilities from original workflow  
+✅ **Permissions**: Explicit GitHub token permissions with minimal required scope  
