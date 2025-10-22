@@ -35,8 +35,8 @@ This workflow creates comprehensive test scenarios to validate the UpdateTestBra
    - **Base branch**: The branch to test against (default: main)
    - **Test scenario**: Which scenarios to run (default: all)
 5. Wait for setup to complete
-6. Follow the generated test report to run individual tests
-7. Comment `!update-test` on the created PRs to trigger UpdateTestBranch workflow
+6. **The UpdateTestBranch workflow will be automatically triggered** for all test scenarios
+7. Check the Actions tab and PR comments to see the test results
 
 #### What Gets Tested
 

@@ -146,8 +146,9 @@ jobs:
           git push origin ${{ env.FEATURE_BRANCH }}
 
       - name: Create pull request
+        id: create_pr_basic
         run: |
-          gh pr create \
+          PR_URL=$(gh pr create \
             --base ${{ env.BASE_BRANCH }} \
             --head ${{ env.FEATURE_BRANCH }} \
             --title "[Test Scenario] Basic Cherry-Pick Test - ${{ env.SCENARIO_ID }}" \
@@ -157,8 +158,18 @@ jobs:
             **Expected**: All commits should be successfully cherry-picked to test branch
             **Commits**: 3 new commits with no conflicts
             
-            To test: Comment \`!update-test\` on this PR" \
-            --assignee ${{ github.actor }}
+            **Status**: UpdateTestBranch workflow will be triggered automatically" \
+            --assignee ${{ github.actor }})
+          echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
+          echo "PR_NUMBER=$(echo $PR_URL | grep -o '[0-9]*$')" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger UpdateTestBranch workflow
+        run: |
+          # Wait a moment for PR to be fully created
+          sleep 5
+          gh pr comment ${{ steps.create_pr_basic.outputs.PR_NUMBER }} --body "!update-test"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -168,6 +179,7 @@ jobs:
           echo "- Feature Branch: \`${{ env.FEATURE_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- PR created with 3 commits" >> $GITHUB_STEP_SUMMARY
           echo "- Expected: All commits cherry-picked successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- **🤖 UpdateTestBranch triggered automatically**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
   test_already_picked_commits:
@@ -235,8 +247,9 @@ jobs:
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
       - name: Create pull request
+        id: create_pr_already_picked
         run: |
-          gh pr create \
+          PR_URL=$(gh pr create \
             --base ${{ env.BASE_BRANCH }} \
             --head ${{ env.FEATURE_BRANCH }} \
             --title "[Test Scenario] Already Picked Commits Test - ${{ env.SCENARIO_ID }}" \
@@ -246,8 +259,18 @@ jobs:
             **Expected**: Only the last commit should be cherry-picked (first 2 already exist)
             **Setup**: Feature test branch already has 2/3 commits cherry-picked
             
-            To test: Comment \`!update-test\` on this PR" \
-            --assignee ${{ github.actor }}
+            **Status**: UpdateTestBranch workflow will be triggered automatically" \
+            --assignee ${{ github.actor }})
+          echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
+          echo "PR_NUMBER=$(echo $PR_URL | grep -o '[0-9]*$')" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger UpdateTestBranch workflow
+        run: |
+          # Wait a moment for PR to be fully created
+          sleep 5
+          gh pr comment ${{ steps.create_pr_already_picked.outputs.PR_NUMBER }} --body "!update-test"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -258,6 +281,7 @@ jobs:
           echo "- Feature Test Branch: \`${{ env.FEATURE_TEST_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- PR created with 3 commits (2 pre-picked)" >> $GITHUB_STEP_SUMMARY
           echo "- Expected: Only 1 new commit cherry-picked" >> $GITHUB_STEP_SUMMARY
+          echo "- **🤖 UpdateTestBranch triggered automatically**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
   test_cherry_pick_conflicts:
@@ -313,8 +337,9 @@ jobs:
           git push origin ${{ env.FEATURE_BRANCH }}
 
       - name: Create pull request
+        id: create_pr_conflicts
         run: |
-          gh pr create \
+          PR_URL=$(gh pr create \
             --base ${{ env.BASE_BRANCH }} \
             --head ${{ env.FEATURE_BRANCH }} \
             --title "[Test Scenario] Cherry-Pick Conflicts Test - ${{ env.SCENARIO_ID }}" \
@@ -324,8 +349,18 @@ jobs:
             **Expected**: Cherry-pick should fail on first commit due to conflicts
             **Setup**: Test branch has conflicting changes to same file
             
-            To test: Comment \`!update-test\` on this PR" \
-            --assignee ${{ github.actor }}
+            **Status**: UpdateTestBranch workflow will be triggered automatically" \
+            --assignee ${{ github.actor }})
+          echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
+          echo "PR_NUMBER=$(echo $PR_URL | grep -o '[0-9]*$')" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger UpdateTestBranch workflow
+        run: |
+          # Wait a moment for PR to be fully created
+          sleep 5
+          gh pr comment ${{ steps.create_pr_conflicts.outputs.PR_NUMBER }} --body "!update-test"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -335,6 +370,7 @@ jobs:
           echo "- Feature Branch: \`${{ env.FEATURE_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- PR created with 2 commits (1 conflicting)" >> $GITHUB_STEP_SUMMARY
           echo "- Expected: Cherry-pick fails, manual resolution required" >> $GITHUB_STEP_SUMMARY
+          echo "- **🤖 UpdateTestBranch triggered automatically**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
   test_no_new_commits:
@@ -387,8 +423,9 @@ jobs:
           git push origin ${{ env.FEATURE_TEST_BRANCH }}
 
       - name: Create pull request
+        id: create_pr_no_commits
         run: |
-          gh pr create \
+          PR_URL=$(gh pr create \
             --base ${{ env.BASE_BRANCH }} \
             --head ${{ env.FEATURE_BRANCH }} \
             --title "[Test Scenario] No New Commits Test - ${{ env.SCENARIO_ID }}" \
@@ -398,8 +435,18 @@ jobs:
             **Expected**: Workflow should detect no new commits and skip update
             **Setup**: Feature test branch already has all commits
             
-            To test: Comment \`!update-test\` on this PR" \
-            --assignee ${{ github.actor }}
+            **Status**: UpdateTestBranch workflow will be triggered automatically" \
+            --assignee ${{ github.actor }})
+          echo "PR_URL=$PR_URL" >> $GITHUB_OUTPUT
+          echo "PR_NUMBER=$(echo $PR_URL | grep -o '[0-9]*$')" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger UpdateTestBranch workflow
+        run: |
+          # Wait a moment for PR to be fully created
+          sleep 5
+          gh pr comment ${{ steps.create_pr_no_commits.outputs.PR_NUMBER }} --body "!update-test"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -410,6 +457,7 @@ jobs:
           echo "- Feature Test Branch: \`${{ env.FEATURE_TEST_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY  
           echo "- PR created with 1 commit (already picked)" >> $GITHUB_STEP_SUMMARY
           echo "- Expected: No new commits to cherry-pick, skip update" >> $GITHUB_STEP_SUMMARY
+          echo "- **🤖 UpdateTestBranch triggered automatically**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
   finalize_test_summary:
@@ -465,11 +513,13 @@ jobs:
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### How to Test" >> $GITHUB_STEP_SUMMARY
+          echo "### Automated Testing" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. **Navigate to the created PRs** for each test scenario" >> $GITHUB_STEP_SUMMARY
-          echo "2. **Comment \`!update-test\`** on each PR to trigger UpdateTestBranch workflow" >> $GITHUB_STEP_SUMMARY
-          echo "3. **Observe the behavior** and verify it matches the expected results" >> $GITHUB_STEP_SUMMARY
+          echo "🤖 **UpdateTestBranch workflows have been automatically triggered** for all test scenarios!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Check the Actions tab** to see the UpdateTestBranch workflow runs" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Navigate to the created PRs** to see the workflow results and comments" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Observe the behavior** and verify it matches the expected results below" >> $GITHUB_STEP_SUMMARY
           echo "4. **Check the created test PRs** to validate cherry-pick results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Expected Test Results" >> $GITHUB_STEP_SUMMARY
