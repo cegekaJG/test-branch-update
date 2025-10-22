@@ -5,6 +5,11 @@ on:
     types:
       created
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 env:
   TEST_BRANCH: test/main
   FEATURE_TEST_PREFIX: test/
@@ -180,37 +185,46 @@ jobs:
         if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.prepare_update.outputs.disable_comments == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
+          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
+          TEST_PR_URL: ${{ needs.call_core_workflow.outputs.test_pr_url }}
+          NOTICE_COMMENT_TAG: ${{ needs.prepare_update.outputs.notice_comment_tag }}
         run: |
-          body='**Automatic ${{ needs.prepare_update.outputs.test_branch }} update failed.**
+          body="**Automatic ${TEST_BRANCH} update failed.**
 
           To manually resolve the merge conflicts, please follow these steps:
 
-          1) Checkout the latest version of the branch `${{ needs.call_core_workflow.outputs.feature_test_branch }}` with the following commands:
-          ```bash
-          git fetch origin ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          git checkout ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          git reset --hard origin/${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          ```
+          1) Checkout the latest version of the branch \`${FEATURE_TEST_BRANCH}\` with the following commands:
+          \`\`\`bash
+          git fetch origin ${FEATURE_TEST_BRANCH}
+          git checkout ${FEATURE_TEST_BRANCH}
+          git reset --hard origin/${FEATURE_TEST_BRANCH}
+          \`\`\`
           2) Manually cherry-pick the failing commits and resolve any conflicts.
           3) Push the changes and the PR will be updated automatically.
-          4) Re-run the workflow by commenting `!update-test` in ${{ github.event.issue.pull_request.html_url }} again.'
+          4) Re-run the workflow by commenting \`!update-test\` in ${{ github.event.issue.pull_request.html_url }} again."
 
-          gh pr comment ${{ needs.call_core_workflow.outputs.test_pr_url }} --body '${{ needs.prepare_update.outputs.notice_comment_tag }}
-          '"$body"
+          gh pr comment "${TEST_PR_URL}" --body "${NOTICE_COMMENT_TAG}
+          ${body}"
 
       - name: Comment on original PR
         if: needs.prepare_update.outputs.disable_comments == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FEATURE_BRANCH: ${{ needs.prepare_update.outputs.feature_branch }}
+          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
+          TEST_PR_URL: ${{ needs.call_core_workflow.outputs.test_pr_url }}
+          NOTICE_COMMENT_TAG: ${{ needs.prepare_update.outputs.notice_comment_tag }}
+          CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
         run: |
-          if [ '${{ needs.call_core_workflow.outputs.cherry_pick_success }}' == "true" ]; then
-            body='The cherry-picked changes from `${{ needs.prepare_update.outputs.feature_branch }}` are ready to be added to the `${{ needs.prepare_update.outputs.test_branch }}` branch.
+          if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
+            body="The cherry-picked changes from \`${FEATURE_BRANCH}\` are ready to be added to the \`${TEST_BRANCH}\` branch.
 
-            A new pull request has been created to test the changes. See ${{ needs.call_core_workflow.outputs.test_pr_url }} for more details.'
+            A new pull request has been created to test the changes. See ${TEST_PR_URL} for more details."
           else
-            body='Unable to cherry-pick the changes from `${{ needs.prepare_update.outputs.feature_branch }}` to the `${{ needs.prepare_update.outputs.test_branch }}` branch.
+            body="Unable to cherry-pick the changes from \`${FEATURE_BRANCH}\` to the \`${TEST_BRANCH}\` branch.
 
-            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${{ needs.call_core_workflow.outputs.test_pr_url }} for more details.'
+            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${TEST_PR_URL} for more details."
           fi
-          gh pr comment ${{ github.event.issue.number }} --body '${{ needs.prepare_update.outputs.notice_comment_tag }}
-          '"$body"
+          gh pr comment ${{ github.event.issue.number }} --body "${NOTICE_COMMENT_TAG}
+          ${body}"

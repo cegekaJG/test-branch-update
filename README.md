@@ -38,6 +38,22 @@ This workflow creates comprehensive test scenarios to validate the UpdateTestBra
 6. **The UpdateTestBranch workflow will be automatically triggered** for all test scenarios
 7. Check the Actions tab and PR comments to see the test results
 
+## Manual Usage of Core Workflow
+
+The core `UpdateTestBranchCore` workflow can also be triggered manually:
+
+1. Go to Actions → "Update Test Branch Core"
+2. Click "Run workflow" 
+3. Provide required inputs:
+   - **test_branch**: Target test branch (e.g., `test/main`)
+   - **feature_branch**: Source feature branch  
+   - **base_branch**: Base branch for comparison
+   - **feature_test_prefix**: Prefix for test branches (default: `test/`)
+   - **bot_label**: PR label (default: `Automated`)
+   - **use_github_token**: Use GITHUB_TOKEN vs GHTOKENWORKFLOW
+
+This allows direct testing of the cherry-picking logic without PR comments.
+
 #### What Gets Tested
 
 - ✅ Correct commit detection and cherry-picking
@@ -50,10 +66,29 @@ This workflow creates comprehensive test scenarios to validate the UpdateTestBra
 ## Workflows
 
 ### UpdateTestBranch.yaml
-The main workflow that handles cherry-picking commits from feature PRs to test branches.
+The main wrapper workflow that handles PR comments (`!update-test`) and coordinates the cherry-picking process. This workflow:
+- Extracts PR information and configuration from comments
+- Calls the core UpdateTestBranchCore workflow with appropriate parameters
+- Handles post-processing like PR comments and cleanup
+
+### UpdateTestBranchCore.yaml
+The core cherry-picking workflow that is independent of PR context. This workflow:
+- **Can be called by other workflows** via `workflow_call`
+- **Can be triggered manually** via `workflow_dispatch` 
+- Takes all necessary parameters as inputs (no dependency on secrets/variables)
+- Focuses solely on cherry-picking commits and creating test PRs
+- **Reusable** and **testable** in isolation
 
 ### SetupTestScenario.yaml  
 Comprehensive test scenario generator for validating UpdateTestBranch functionality.
 
 ### DocumentMergedCommits.yaml
 **DISABLED**: This workflow is no longer needed as UpdateTestBranch no longer relies on PR comments for tracking cherry-picked commits.
+
+## New Architecture Benefits
+
+✅ **Modularity**: Core cherry-picking logic is separate from PR comment handling  
+✅ **Reusability**: Core workflow can be called by other workflows or triggered manually  
+✅ **Testability**: Core workflow can be tested independently with specific inputs  
+✅ **Maintainability**: Cleaner separation of concerns  
+✅ **Backward Compatibility**: Existing `!update-test` comments still work  

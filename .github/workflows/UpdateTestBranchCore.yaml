@@ -50,6 +50,39 @@ on:
       GHTOKENWORKFLOW:
         description: 'GitHub token for workflow operations'
         required: false
+  workflow_dispatch:
+    inputs:
+      test_branch:
+        description: 'The test branch to cherry-pick commits into (e.g., test/main)'
+        required: true
+        type: string
+      feature_branch:
+        description: 'The feature branch containing commits to cherry-pick'
+        required: true
+        type: string
+      base_branch:
+        description: 'The base branch for comparison'
+        required: true
+        type: string
+      feature_test_prefix:
+        description: 'Prefix for feature test branches (e.g., test/)'
+        required: false
+        type: string
+        default: 'test/'
+      bot_label:
+        description: 'Label to apply to created PRs'
+        required: false
+        type: string
+        default: 'Automated'
+      use_github_token:
+        description: 'Whether to use GITHUB_TOKEN instead of GHTOKENWORKFLOW'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
 
 env:
   SKIP_ALL: false
@@ -89,13 +122,20 @@ jobs:
 
       - name: Set environment variables
         if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
+          FEATURE_TEST_PREFIX_INPUT: ${{ inputs.feature_test_prefix }}
+          FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
+          BOT_LABEL_INPUT: ${{ inputs.bot_label }}
+          BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
         run: |
-          echo "TEST_BRANCH=${{ inputs.test_branch }}" >> $GITHUB_ENV
-          echo "FEATURE_TEST_PREFIX=${{ inputs.feature_test_prefix }}" >> $GITHUB_ENV
-          echo "FEATURE_TEST_BRANCH=${{ inputs.feature_test_prefix }}${{ inputs.feature_branch }}" >> $GITHUB_ENV
-          echo "BOT_LABEL=${{ inputs.bot_label }}" >> $GITHUB_ENV
-          echo "HEAD_REF=${{ inputs.feature_branch }}" >> $GITHUB_ENV
-          echo "BASE_REF=${{ inputs.base_branch }}" >> $GITHUB_ENV
+          # Sanitize inputs to prevent code injection
+          printf 'TEST_BRANCH=%s\n' "${TEST_BRANCH_INPUT}" >> $GITHUB_ENV
+          printf 'FEATURE_TEST_PREFIX=%s\n' "${FEATURE_TEST_PREFIX_INPUT}" >> $GITHUB_ENV  
+          printf 'FEATURE_TEST_BRANCH=%s%s\n' "${FEATURE_TEST_PREFIX_INPUT}" "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
+          printf 'BOT_LABEL=%s\n' "${BOT_LABEL_INPUT}" >> $GITHUB_ENV
+          printf 'HEAD_REF=%s\n' "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
+          printf 'BASE_REF=%s\n' "${BASE_BRANCH_INPUT}" >> $GITHUB_ENV
 
       - name: Setup GH_TOKEN
         if: ${{ env.SKIP_ALL == 'false' && inputs.use_github_token == false }}
@@ -115,24 +155,29 @@ jobs:
 
       - name: Check branch settings
         if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
+          BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
         run: |
-          if [ '${{ inputs.feature_branch }}' == '${{ inputs.test_branch }}' ]; then
-            echo "::error::You cannot update the test branch ${{ inputs.test_branch }} with itself."
+          if [ "${FEATURE_BRANCH_INPUT}" == "${TEST_BRANCH_INPUT}" ]; then
+            echo "::error::You cannot update the test branch ${TEST_BRANCH_INPUT} with itself."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             exit 1
           fi
-          if [ '${{ inputs.base_branch }}' == '${{ inputs.test_branch }}' ]; then
-            echo "::error::The base branch cannot be the same as the test branch ${{ inputs.test_branch }}."
+          if [ "${BASE_BRANCH_INPUT}" == "${TEST_BRANCH_INPUT}" ]; then
+            echo "::error::The base branch cannot be the same as the test branch ${TEST_BRANCH_INPUT}."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             exit 1
           fi
 
       - name: Check if test branch exists
         if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
         run: |
-          test_branch='${{ inputs.test_branch }}'
-          if ! git ls-remote --heads origin | grep -q "refs/heads/$test_branch$"; then
-            echo "::error::Branch $test_branch does not exist. Please create the branch first."
+          if ! git ls-remote --heads origin | grep -q "refs/heads/${TEST_BRANCH_INPUT}$"; then
+            echo "::error::Branch ${TEST_BRANCH_INPUT} does not exist. Please create the branch first."
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             exit 1
           fi
@@ -140,13 +185,14 @@ jobs:
       - name: Get list of feature commits
         id: get_feature_commits
         if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
+          FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
         run: |
-          base_ref='${{ inputs.base_branch }}'
-          head_ref='${{ inputs.feature_branch }}'
-          git fetch origin $base_ref
-          git fetch origin $head_ref
+          git fetch origin "${BASE_BRANCH_INPUT}"
+          git fetch origin "${FEATURE_BRANCH_INPUT}"
 
-          feature_commits=$(git log --reverse --no-merges --pretty=format:%h origin/$base_ref..origin/$head_ref)
+          feature_commits=$(git log --reverse --no-merges --pretty=format:%h "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
 
           if [ -z "$feature_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
@@ -154,7 +200,7 @@ jobs:
             exit 0
           fi
 
-          feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" origin/$base_ref..origin/$head_ref)
+          feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
 
           echo -e 'Feature commits:\n'"$feature_commits_pretty"
           for commit in $feature_commits; do
@@ -183,15 +229,15 @@ jobs:
       - name: Get list of already cherry-picked commits
         id: get_cherry_picked_commits
         if: ${{ env.SKIP_ALL == 'false' && steps.check_feat_test.outputs.SKIP_CHERRY_LIST == 'false' }}
+        env:
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
         run: |
-          test_branch='${{ inputs.test_branch }}'
-          feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
-          git fetch origin $test_branch
-          git fetch origin $feature_test_branch
+          git fetch origin "${TEST_BRANCH_INPUT}"
+          git fetch origin "${FEATURE_TEST_BRANCH}"
 
           commit_separator=$'\001'
           commit_separator_esc='\\001'
-          feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" origin/$test_branch..origin/$feature_test_branch)
+          feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "origin/${TEST_BRANCH_INPUT}..origin/${FEATURE_TEST_BRANCH}")
 
           if [ -z "$feature_test_bodies" ]; then
             echo "::notice::No new commits in \"$feature_test_branch\" found."
@@ -281,17 +327,17 @@ jobs:
 
       - name: Create/Checkout feature test branch
         if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
         run: |
-          feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
-          test_branch='${{ inputs.test_branch }}'
-          git fetch origin $test_branch
+          git fetch origin "${TEST_BRANCH_INPUT}"
 
-          if git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$"; then
-            git fetch origin $feature_test_branch
-            git checkout $feature_test_branch
+          if git ls-remote --heads origin | grep -q "refs/heads/${FEATURE_TEST_BRANCH}$"; then
+            git fetch origin "${FEATURE_TEST_BRANCH}"
+            git checkout "${FEATURE_TEST_BRANCH}"
           else
-            git checkout $test_branch
-            git checkout -b $feature_test_branch
+            git checkout "${TEST_BRANCH_INPUT}"
+            git checkout -b "${FEATURE_TEST_BRANCH}"
           fi
 
       - name: Cherry-pick new commits
@@ -344,15 +390,15 @@ jobs:
 
       - name: "On success: Commit & push cherry-picked changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'success' }}
+        env:
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
         run: |
-          feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
-          compare_branch='${{ inputs.test_branch }}'
           push=false
           if [ -n "$(git status --porcelain)" ]; then
             git commit
           fi
-          if git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$"; then
-            if [ -n "$(git log origin/$feature_test_branch..$feature_test_branch)" ]; then
+          if git ls-remote --heads origin | grep -q "refs/heads/${FEATURE_TEST_BRANCH}$"; then
+            if [ -n "$(git log "origin/${FEATURE_TEST_BRANCH}..${FEATURE_TEST_BRANCH}")" ]; then
               push=true
             fi
           else
@@ -361,7 +407,7 @@ jobs:
             fi
           fi
           if [ $push == true ]; then
-            git push origin $feature_test_branch
+            git push origin "${FEATURE_TEST_BRANCH}"
           else
             echo "No changes to push."
           fi
@@ -393,74 +439,80 @@ jobs:
 
       - name: "On failure: Abort cherry-pick & push changes"
         if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
+        env:
+          FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
         run: |
-          feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
           git reset --hard
-          if [ -z "$(git log origin/$feature_test_branch..$feature_test_branch)" ]; then
-            echo "Pushing empty commit to $feature_test_branch to create PR."
-            git commit --allow-empty -m 'Cherry-pick of `${{ inputs.feature_branch }}` failed.
+          if [ -z "$(git log "origin/${FEATURE_TEST_BRANCH}..${FEATURE_TEST_BRANCH}")" ]; then
+            echo "Pushing empty commit to ${FEATURE_TEST_BRANCH} to create PR."
+            git commit --allow-empty -m "Cherry-pick of ${FEATURE_BRANCH_INPUT} failed.
 
-          Manual resolution required.'
+          Manual resolution required."
           fi
-          git push origin $feature_test_branch
+          git push origin "${FEATURE_TEST_BRANCH}"
           echo "NO_CHANGES=false" >> $GITHUB_ENV
 
       - name: Look for existing update PR
         id: check_existing_pr
         if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
         run: |
-          feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
-          test_branch='${{ inputs.test_branch }}'
-          if [ $(gh pr list --base $test_branch --head $feature_test_branch --state open | wc -l) -gt 0 ]; then
+          if [ $(gh pr list --base "${TEST_BRANCH_INPUT}" --head "${FEATURE_TEST_BRANCH}" --state open | wc -l) -gt 0 ]; then
             echo "PR already exists."
             echo "NO_CHANGES=false" >> $GITHUB_ENV
             echo "PR_EXISTS=true" >> $GITHUB_OUTPUT
           else
-            echo "No PR of $feature_test_branch to $test_branch found."
+            echo "No PR of ${FEATURE_TEST_BRANCH} to ${TEST_BRANCH_INPUT} found."
             echo "PR_EXISTS=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Ensure bot label exists
         if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
+        env:
+          BOT_LABEL_INPUT: ${{ inputs.bot_label }}
         run: |
-          bot_label='${{ inputs.bot_label }}'
-          if [ -z "$(gh label list --search "$bot_label" --limit 1)" ]; then
-            gh label create $bot_label --color CCCCCC --description "Automated pull requests"
-            echo "::notice::Label $bot_label added to repository."
+          if [ -z "$(gh label list --search "${BOT_LABEL_INPUT}" --limit 1)" ]; then
+            gh label create "${BOT_LABEL_INPUT}" --color CCCCCC --description "Automated pull requests"
+            echo "::notice::Label ${BOT_LABEL_INPUT} added to repository."
           fi
 
       - name: Create/Update pull request
         if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
+        env:
+          FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
+          BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
+          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
+          BOT_LABEL_INPUT: ${{ inputs.bot_label }}
         run: |
-          feature_title="Test branch for ${{ inputs.feature_branch }}"
-          echo "PR title: $feature_title"
-          body='This automated pull request adds the cherry-picked changes from `${{ inputs.feature_branch }}` to `${{ inputs.test_branch }}`.
+          feature_title="Test branch for ${FEATURE_BRANCH_INPUT}"
+          echo "PR title: ${feature_title}"
+          body="This automated pull request adds the cherry-picked changes from \`${FEATURE_BRANCH_INPUT}\` to \`${TEST_BRANCH_INPUT}\`.
 
-          **Feature Branch**: `${{ inputs.feature_branch }}`
-          **Base Branch**: `${{ inputs.base_branch }}`
-          **Test Branch**: `${{ inputs.test_branch }}`'
+          **Feature Branch**: \`${FEATURE_BRANCH_INPUT}\`
+          **Base Branch**: \`${BASE_BRANCH_INPUT}\`
+          **Test Branch**: \`${TEST_BRANCH_INPUT}\`"
           
           if [ ${{ steps.check_existing_pr.outputs.PR_EXISTS }} == 'false' ]; then
             TEST_PR_URL=$(gh pr create \
-              --base ${{ inputs.test_branch }} \
-              --head ${{ env.FEATURE_TEST_BRANCH }} \
-              --title "$feature_title" \
-              --label ${{ inputs.bot_label }} \
-              --body "$body")
-            echo "::notice::$TEST_PR_URL created."
+              --base "${TEST_BRANCH_INPUT}" \
+              --head "${FEATURE_TEST_BRANCH}" \
+              --title "${feature_title}" \
+              --label "${BOT_LABEL_INPUT}" \
+              --body "${body}")
+            echo "::notice::${TEST_PR_URL} created."
           else
-            TEST_PR_URL=$(gh pr edit ${{ env.FEATURE_TEST_BRANCH }} \
-              --body "$body")
-            echo "::notice::$TEST_PR_URL updated."
+            TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
+              --body "${body}")
+            echo "::notice::${TEST_PR_URL} updated."
           fi
-          echo "TEST_PR_URL=$TEST_PR_URL" >> $GITHUB_ENV
+          echo "TEST_PR_URL=${TEST_PR_URL}" >> $GITHUB_ENV
 
       - name: Set pull request status
         if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
         run: |
-          feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
           if [ '${{ steps.cherry_pick.outcome }}' == "success" ]; then
-            gh pr ready $feature_test_branch
+            gh pr ready "${FEATURE_TEST_BRANCH}"
           else
-            gh pr ready --undo $feature_test_branch
+            gh pr ready --undo "${FEATURE_TEST_BRANCH}"
           fi
