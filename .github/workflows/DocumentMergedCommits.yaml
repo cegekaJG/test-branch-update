@@ -21,7 +21,8 @@ env:
 jobs:
   list-commits:
     name: List commits in feature PR
-    if: ${{ github.event.pull_request.merged == true }} && contains(github.event.pull_request.labels.*.name, env.BOT_LABEL)
+    # DISABLED: This workflow is no longer needed as UpdateTestBranch no longer relies on PR comments
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Set environment variables
