@@ -84,9 +84,53 @@ jobs:
           echo "NOTICE_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_NOTICE_COMMENT_TAG || env.NOTICE_COMMENT_TAG }}" >> $GITHUB_OUTPUT
           echo "COMMIT_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_COMMIT_COMMENT_TAG || env.COMMIT_COMMENT_TAG }}" >> $GITHUB_OUTPUT
 
+  check_existing_pr:
+    name: Look for Existing Update PR
+    needs: prepare_update
+    runs-on: ubuntu-latest
+    outputs:
+      pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup GH_TOKEN
+        if: ${{ needs.prepare_update.outputs.use_github_token == 'false' }}
+        run: |
+          token='${{ secrets.GHTOKENWORKFLOW }}'
+          if [ -z "$token" ]; then
+            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
+            exit 1
+          fi
+          echo "GH_TOKEN=$token" >> $GITHUB_ENV
+
+      - name: Use GitHub Token
+        if: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
+        run: |
+          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+      - name: Look for existing update PR
+        id: check_pr
+        env:
+          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
+          FEATURE_BRANCH: ${{ needs.prepare_update.outputs.feature_branch }}
+          FEATURE_TEST_PREFIX: ${{ needs.prepare_update.outputs.feature_test_prefix }}
+        run: |
+          feature_test_branch="${FEATURE_TEST_PREFIX}${FEATURE_BRANCH}"
+          
+          if [ $(gh pr list --base "${TEST_BRANCH}" --head "${feature_test_branch}" --state open | wc -l) -gt 0 ]; then
+            echo "PR already exists."
+            echo "PR_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "No PR of ${feature_test_branch} to ${TEST_BRANCH} found."
+            echo "PR_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
   call_core_workflow:
     name: Call Core Update Workflow
-    needs: prepare_update
+    needs: [prepare_update, check_existing_pr]
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
       test_branch: ${{ needs.prepare_update.outputs.test_branch }}
@@ -95,12 +139,13 @@ jobs:
       feature_test_prefix: ${{ needs.prepare_update.outputs.feature_test_prefix }}
       bot_label: ${{ needs.prepare_update.outputs.bot_label }}
       use_github_token: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
+      pr_exists: ${{ needs.check_existing_pr.outputs.pr_exists == 'true' }}
     secrets:
       GHTOKENWORKFLOW: ${{ secrets.GHTOKENWORKFLOW }}
 
   add_reaction:
     name: Add Reaction
-    needs: [prepare_update, call_core_workflow]
+    needs: [prepare_update, check_existing_pr, call_core_workflow]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -112,7 +157,7 @@ jobs:
 
   cleanup_comments:
     name: Clean up comments
-    needs: [prepare_update, call_core_workflow]
+    needs: [prepare_update, check_existing_pr, call_core_workflow]
     if: always() && needs.call_core_workflow.outputs.test_pr_url != ''
     runs-on: ubuntu-latest
     steps:
@@ -174,7 +219,7 @@ jobs:
 
   comment_on_prs:
     name: Comment on PRs
-    needs: [prepare_update, call_core_workflow]
+    needs: [prepare_update, check_existing_pr, call_core_workflow]
     if: always() && needs.call_core_workflow.outputs.test_pr_url != ''
     runs-on: ubuntu-latest
     steps:

@@ -30,6 +30,11 @@ on:
         required: false
         type: boolean
         default: false
+      pr_exists:
+        description: 'Whether a PR already exists (checked by wrapper workflow)'
+        required: false
+        type: boolean
+        default: false
     outputs:
       test_pr_url:
         description: 'URL of the created/updated test PR'
@@ -76,6 +81,11 @@ on:
         default: 'Automated'
       use_github_token:
         description: 'Whether to use GITHUB_TOKEN instead of GHTOKENWORKFLOW'
+        required: false
+        type: boolean
+        default: false
+      pr_exists:
+        description: 'Whether a PR already exists (checked by wrapper workflow)'
         required: false
         type: boolean
         default: false
@@ -452,20 +462,6 @@ jobs:
           git push origin "${FEATURE_TEST_BRANCH}"
           echo "NO_CHANGES=false" >> $GITHUB_ENV
 
-      - name: Look for existing update PR
-        id: check_existing_pr
-        if: ${{ env.SKIP_ALL == 'false' }}
-        env:
-          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
-        run: |
-          if [ $(gh pr list --base "${TEST_BRANCH_INPUT}" --head "${FEATURE_TEST_BRANCH}" --state open | wc -l) -gt 0 ]; then
-            echo "PR already exists."
-            echo "NO_CHANGES=false" >> $GITHUB_ENV
-            echo "PR_EXISTS=true" >> $GITHUB_OUTPUT
-          else
-            echo "No PR of ${FEATURE_TEST_BRANCH} to ${TEST_BRANCH_INPUT} found."
-            echo "PR_EXISTS=false" >> $GITHUB_OUTPUT
-          fi
 
       - name: Ensure bot label exists
         if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
@@ -493,7 +489,7 @@ jobs:
           **Base Branch**: \`${BASE_BRANCH_INPUT}\`
           **Test Branch**: \`${TEST_BRANCH_INPUT}\`"
           
-          if [ ${{ steps.check_existing_pr.outputs.PR_EXISTS }} == 'false' ]; then
+          if [ ${{ inputs.pr_exists }} == 'false' ]; then
             TEST_PR_URL=$(gh pr create \
               --base "${TEST_BRANCH_INPUT}" \
               --head "${FEATURE_TEST_BRANCH}" \
