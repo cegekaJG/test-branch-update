@@ -128,9 +128,41 @@ jobs:
             echo "PR_EXISTS=false" >> $GITHUB_OUTPUT
           fi
 
+  ensure_bot_label:
+    name: Ensure Bot Label Exists
+    needs: [prepare_update, check_existing_pr]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup GH_TOKEN
+        if: ${{ needs.prepare_update.outputs.use_github_token == 'false' }}
+        run: |
+          token='${{ secrets.GHTOKENWORKFLOW }}'
+          if [ -z "$token" ]; then
+            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
+            exit 1
+          fi
+          echo "GH_TOKEN=$token" >> $GITHUB_ENV
+
+      - name: Use GitHub Token
+        if: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
+        run: |
+          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+      - name: Ensure bot label exists
+        env:
+          BOT_LABEL: ${{ needs.prepare_update.outputs.bot_label }}
+        run: |
+          if [ -z "$(gh label list --search "${BOT_LABEL}" --limit 1)" ]; then
+            gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"
+            echo "::notice::Label ${BOT_LABEL} added to repository."
+          fi
+
   call_core_workflow:
     name: Call Core Update Workflow
-    needs: [prepare_update, check_existing_pr]
+    needs: [prepare_update, check_existing_pr, ensure_bot_label]
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
       test_branch: ${{ needs.prepare_update.outputs.test_branch }}
@@ -143,9 +175,79 @@ jobs:
     secrets:
       GHTOKENWORKFLOW: ${{ secrets.GHTOKENWORKFLOW }}
 
+  create_update_pr:
+    name: Create/Update Pull Request
+    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow]
+    runs-on: ubuntu-latest
+    if: needs.call_core_workflow.outputs.skip_all == 'false' && needs.call_core_workflow.outputs.no_changes == 'false'
+    outputs:
+      test_pr_url: ${{ steps.create_pr.outputs.TEST_PR_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup GH_TOKEN
+        if: ${{ needs.prepare_update.outputs.use_github_token == 'false' }}
+        run: |
+          token='${{ secrets.GHTOKENWORKFLOW }}'
+          if [ -z "$token" ]; then
+            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
+            exit 1
+          fi
+          echo "GH_TOKEN=$token" >> $GITHUB_ENV
+
+      - name: Use GitHub Token
+        if: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
+        run: |
+          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+      - name: Create/Update pull request
+        id: create_pr
+        env:
+          FEATURE_BRANCH: ${{ needs.prepare_update.outputs.feature_branch }}
+          BASE_BRANCH: ${{ needs.prepare_update.outputs.base_branch }}
+          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
+          BOT_LABEL: ${{ needs.prepare_update.outputs.bot_label }}
+          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
+          PR_EXISTS: ${{ needs.check_existing_pr.outputs.pr_exists }}
+        run: |
+          feature_title="Test branch for ${FEATURE_BRANCH}"
+          echo "PR title: ${feature_title}"
+          body="This automated pull request adds the cherry-picked changes from \`${FEATURE_BRANCH}\` to \`${TEST_BRANCH}\`.
+
+          **Feature Branch**: \`${FEATURE_BRANCH}\`
+          **Base Branch**: \`${BASE_BRANCH}\`
+          **Test Branch**: \`${TEST_BRANCH}\`"
+          
+          if [ "${PR_EXISTS}" == 'false' ]; then
+            TEST_PR_URL=$(gh pr create \
+              --base "${TEST_BRANCH}" \
+              --head "${FEATURE_TEST_BRANCH}" \
+              --title "${feature_title}" \
+              --label "${BOT_LABEL}" \
+              --body "${body}")
+            echo "::notice::${TEST_PR_URL} created."
+          else
+            TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
+              --body "${body}")
+            echo "::notice::${TEST_PR_URL} updated."
+          fi
+          echo "TEST_PR_URL=${TEST_PR_URL}" >> $GITHUB_OUTPUT
+
+      - name: Set pull request status
+        env:
+          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
+          CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
+        run: |
+          if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
+            gh pr ready "${FEATURE_TEST_BRANCH}"
+          else
+            gh pr ready --undo "${FEATURE_TEST_BRANCH}"
+          fi
+
   add_reaction:
     name: Add Reaction
-    needs: [prepare_update, check_existing_pr, call_core_workflow]
+    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow, create_update_pr]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -157,8 +259,8 @@ jobs:
 
   cleanup_comments:
     name: Clean up comments
-    needs: [prepare_update, check_existing_pr, call_core_workflow]
-    if: always() && needs.call_core_workflow.outputs.test_pr_url != ''
+    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow, create_update_pr]
+    if: always() && needs.create_update_pr.outputs.test_pr_url != ''
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -173,8 +275,8 @@ jobs:
           script: |
             (async () => {
               let newPrComments = [];
-              if ("${{ needs.call_core_workflow.outputs.test_pr_url }}") {
-                const urlSubstrings = "${{ needs.call_core_workflow.outputs.test_pr_url }}".split('/');
+              if ("${{ needs.create_update_pr.outputs.test_pr_url }}") {
+                const urlSubstrings = "${{ needs.create_update_pr.outputs.test_pr_url }}".split('/');
                 const newPrNumber = urlSubstrings[urlSubstrings.length - 1];
                 try {
                   newPrComments = await github.rest.issues.listComments({
@@ -219,8 +321,8 @@ jobs:
 
   comment_on_prs:
     name: Comment on PRs
-    needs: [prepare_update, check_existing_pr, call_core_workflow]
-    if: always() && needs.call_core_workflow.outputs.test_pr_url != ''
+    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow, create_update_pr]
+    if: always() && needs.create_update_pr.outputs.test_pr_url != ''
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -232,7 +334,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          TEST_PR_URL: ${{ needs.call_core_workflow.outputs.test_pr_url }}
+          TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
           NOTICE_COMMENT_TAG: ${{ needs.prepare_update.outputs.notice_comment_tag }}
         run: |
           body="**Automatic ${TEST_BRANCH} update failed.**
@@ -258,7 +360,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FEATURE_BRANCH: ${{ needs.prepare_update.outputs.feature_branch }}
           TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
-          TEST_PR_URL: ${{ needs.call_core_workflow.outputs.test_pr_url }}
+          TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
           NOTICE_COMMENT_TAG: ${{ needs.prepare_update.outputs.notice_comment_tag }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
         run: |
