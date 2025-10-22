@@ -1,14 +1,111 @@
-name: Setup test scenario
+name: Setup Test Scenario - Comprehensive UpdateTestBranch Testing
 
 on:
   workflow_dispatch:
+    inputs:
+      base_branch:
+        description: 'Base branch to test against (default: main)'
+        required: false
+        default: 'main'
+      test_scenario:
+        description: 'Test scenario to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - basic-cherry-pick
+          - already-picked-commits
+          - cherry-pick-conflicts
+          - no-new-commits
+          - mixed-scenarios
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
 
 env:
-  BRANCH_NAME: "feature"
-  TEST_BRANCH: "test/main"
+  TEST_BRANCH_PREFIX: "test/scenario"
+  FEATURE_BRANCH_PREFIX: "feature/test"
+  FEATURE_TEST_PREFIX: "test/"
+  BOT_LABEL: "Automated"
+  SCENARIO_ID: ${{ github.run_number }}
 
 jobs:
-  create_branches:
+  setup_test_scenario:
+    name: Setup Comprehensive Test Scenario
+    runs-on: ubuntu-latest
+    outputs:
+      test_branch: ${{ steps.setup.outputs.test_branch }}
+      scenarios: ${{ steps.setup.outputs.scenarios }}
+      base_branch: ${{ steps.setup.outputs.base_branch }}
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup test environment
+        id: setup
+        run: |
+          base_branch="${{ github.event.inputs.base_branch || 'main' }}"
+          test_branch="${{ env.TEST_BRANCH_PREFIX }}-${base_branch}-${{ env.SCENARIO_ID }}"
+          
+          echo "base_branch=${base_branch}" >> $GITHUB_OUTPUT
+          echo "test_branch=${test_branch}" >> $GITHUB_OUTPUT
+          
+          # Define test scenarios
+          scenarios='["basic-cherry-pick", "already-picked-commits", "cherry-pick-conflicts", "no-new-commits"]'
+          if [ "${{ github.event.inputs.test_scenario }}" != "all" ]; then
+            scenarios='["${{ github.event.inputs.test_scenario }}"]'
+          fi
+          echo "scenarios=${scenarios}" >> $GITHUB_OUTPUT
+          
+          echo "TEST_BRANCH=${test_branch}" >> $GITHUB_ENV
+          echo "BASE_BRANCH=${base_branch}" >> $GITHUB_ENV
+
+      - name: Create test branch from base
+        run: |
+          git fetch origin ${{ env.BASE_BRANCH }} || git fetch origin main
+          
+          # Delete test branch if it exists
+          if git show-ref --quiet refs/remotes/origin/${{ env.TEST_BRANCH }}; then
+            git push origin --delete ${{ env.TEST_BRANCH }}
+          fi
+          
+          # Create test branch from base branch
+          git checkout ${{ env.BASE_BRANCH }} || git checkout main
+          git checkout -b ${{ env.TEST_BRANCH }}
+          
+          # Add some base content to test branch
+          echo "# Test Branch for Scenario ${{ env.SCENARIO_ID }}" > TEST_BRANCH_README.md
+          echo "Base branch: ${{ env.BASE_BRANCH }}" >> TEST_BRANCH_README.md
+          echo "Created: $(date)" >> TEST_BRANCH_README.md
+          git add TEST_BRANCH_README.md
+          git commit -m "Initialize test branch ${{ env.TEST_BRANCH }}"
+          git push origin ${{ env.TEST_BRANCH }}
+
+      - name: Generate test summary
+        run: |
+          echo "## Test Scenario Setup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Configuration:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Base Branch: \`${{ env.BASE_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Test Branch: \`${{ env.TEST_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Scenario ID: \`${{ env.SCENARIO_ID }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Selected Scenarios: \`${{ github.event.inputs.test_scenario || 'all' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  test_basic_cherry_pick:
+    name: "Test: Basic Cherry-Pick Scenario"
+    needs: setup_test_scenario
+    if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'basic-cherry-pick')
     runs-on: ubuntu-latest
     steps:
       - name: Set up Git
@@ -18,29 +115,373 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Create test branch
+      - name: Setup environment variables
         run: |
-          if git show-ref --quiet refs/heads/${{ env.TEST_BRANCH }}; then
-            git push --delete origin ${{ env.TEST_BRANCH }}
-          fi
-          git checkout -b ${{ env.TEST_BRANCH }}
-          git push origin ${{ env.TEST_BRANCH }} --force
+          echo "TEST_BRANCH=${{ needs.setup_test_scenario.outputs.test_branch }}" >> $GITHUB_ENV
+          echo "BASE_BRANCH=${{ needs.setup_test_scenario.outputs.base_branch }}" >> $GITHUB_ENV
+          echo "FEATURE_BRANCH=${{ env.FEATURE_BRANCH_PREFIX }}-basic-${{ env.SCENARIO_ID }}" >> $GITHUB_ENV
 
-      - name: Create feature branch & file
+      - name: Create feature branch with new commits
         run: |
-          git checkout -b ${{ env.BRANCH_NAME }}
-          echo "This is a random file" > newfile.txt
-          git add newfile.txt
-          git commit -m "Add new file"
-          git push origin ${{ env.BRANCH_NAME }}
+          git fetch origin ${{ env.BASE_BRANCH }} || git fetch origin main
+          git checkout ${{ env.BASE_BRANCH }} || git checkout main
+          git checkout -b ${{ env.FEATURE_BRANCH }}
+          
+          # Create multiple commits to cherry-pick
+          echo "Feature content 1" > feature1.txt
+          git add feature1.txt
+          git commit -m "Add feature1.txt - first commit"
+          
+          echo "Feature content 2" > feature2.txt
+          git add feature2.txt
+          git commit -m "Add feature2.txt - second commit"
+          
+          echo "Additional content" >> feature1.txt
+          git add feature1.txt
+          git commit -m "Update feature1.txt - third commit"
+          
+          git push origin ${{ env.FEATURE_BRANCH }}
 
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v6
+        run: |
+          gh pr create \
+            --base ${{ env.BASE_BRANCH }} \
+            --head ${{ env.FEATURE_BRANCH }} \
+            --title "[Test Scenario] Basic Cherry-Pick Test - ${{ env.SCENARIO_ID }}" \
+            --body "This PR tests basic cherry-pick functionality for UpdateTestBranch workflow.
+            
+            **Test Scenario**: Basic Cherry-Pick
+            **Expected**: All commits should be successfully cherry-picked to test branch
+            **Commits**: 3 new commits with no conflicts
+            
+            To test: Comment \`!update-test\` on this PR" \
+            --assignee ${{ github.actor }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update summary
+        run: |
+          echo "### ✅ Basic Cherry-Pick Scenario" >> $GITHUB_STEP_SUMMARY
+          echo "- Feature Branch: \`${{ env.FEATURE_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- PR created with 3 commits" >> $GITHUB_STEP_SUMMARY
+          echo "- Expected: All commits cherry-picked successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  test_already_picked_commits:
+    name: "Test: Already Picked Commits Scenario"
+    needs: setup_test_scenario
+    if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'already-picked-commits')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: ${{ github.ref }}
-          branch: ${{ env.BRANCH_NAME }}
-          title: "Pull Request for ${{ github.ref }}"
-          body: "This pull request was created by the workflow."
-          assignees: ${{ github.actor }}
+          fetch-depth: 0
+
+      - name: Setup environment variables
+        run: |
+          echo "TEST_BRANCH=${{ needs.setup_test_scenario.outputs.test_branch }}" >> $GITHUB_ENV
+          echo "BASE_BRANCH=${{ needs.setup_test_scenario.outputs.base_branch }}" >> $GITHUB_ENV
+          echo "FEATURE_BRANCH=${{ env.FEATURE_BRANCH_PREFIX }}-picked-${{ env.SCENARIO_ID }}" >> $GITHUB_ENV
+          echo "FEATURE_TEST_BRANCH=${{ env.FEATURE_TEST_PREFIX }}${{ env.FEATURE_BRANCH_PREFIX }}-picked-${{ env.SCENARIO_ID }}" >> $GITHUB_ENV
+
+      - name: Create feature branch with commits
+        run: |
+          git fetch origin ${{ env.BASE_BRANCH }} || git fetch origin main
+          git checkout ${{ env.BASE_BRANCH }} || git checkout main
+          git checkout -b ${{ env.FEATURE_BRANCH }}
+          
+          # Create commits
+          echo "Already picked content 1" > already1.txt
+          git add already1.txt
+          git commit -m "Add already1.txt - will be pre-picked"
+          COMMIT1=$(git rev-parse HEAD)
+          
+          echo "Already picked content 2" > already2.txt  
+          git add already2.txt
+          git commit -m "Add already2.txt - will be pre-picked"
+          COMMIT2=$(git rev-parse HEAD)
+          
+          echo "New content" > new.txt
+          git add new.txt
+          git commit -m "Add new.txt - not picked yet"
+          COMMIT3=$(git rev-parse HEAD)
+          
+          git push origin ${{ env.FEATURE_BRANCH }}
+          
+          # Store commit hashes for later
+          echo "COMMIT1=$COMMIT1" >> $GITHUB_ENV
+          echo "COMMIT2=$COMMIT2" >> $GITHUB_ENV
+          echo "COMMIT3=$COMMIT3" >> $GITHUB_ENV
+
+      - name: Create feature test branch with some commits already picked
+        run: |
+          git fetch origin ${{ env.TEST_BRANCH }}
+          git checkout ${{ env.TEST_BRANCH }}
+          git checkout -b ${{ env.FEATURE_TEST_BRANCH }}
+          
+          # Cherry-pick first two commits to simulate already picked
+          git cherry-pick -x ${COMMIT1:0:7}
+          git cherry-pick -x ${COMMIT2:0:7}
+          
+          git push origin ${{ env.FEATURE_TEST_BRANCH }}
+
+      - name: Create pull request
+        run: |
+          gh pr create \
+            --base ${{ env.BASE_BRANCH }} \
+            --head ${{ env.FEATURE_BRANCH }} \
+            --title "[Test Scenario] Already Picked Commits Test - ${{ env.SCENARIO_ID }}" \
+            --body "This PR tests detection of already picked commits for UpdateTestBranch workflow.
+            
+            **Test Scenario**: Already Picked Commits  
+            **Expected**: Only the last commit should be cherry-picked (first 2 already exist)
+            **Setup**: Feature test branch already has 2/3 commits cherry-picked
+            
+            To test: Comment \`!update-test\` on this PR" \
+            --assignee ${{ github.actor }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update summary
+        run: |
+          echo "### ✅ Already Picked Commits Scenario" >> $GITHUB_STEP_SUMMARY
+          echo "- Feature Branch: \`${{ env.FEATURE_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY  
+          echo "- Feature Test Branch: \`${{ env.FEATURE_TEST_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- PR created with 3 commits (2 pre-picked)" >> $GITHUB_STEP_SUMMARY
+          echo "- Expected: Only 1 new commit cherry-picked" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  test_cherry_pick_conflicts:
+    name: "Test: Cherry-Pick Conflicts Scenario"
+    needs: setup_test_scenario
+    if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'cherry-pick-conflicts')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup environment variables
+        run: |
+          echo "TEST_BRANCH=${{ needs.setup_test_scenario.outputs.test_branch }}" >> $GITHUB_ENV
+          echo "BASE_BRANCH=${{ needs.setup_test_scenario.outputs.base_branch }}" >> $GITHUB_ENV
+          echo "FEATURE_BRANCH=${{ env.FEATURE_BRANCH_PREFIX }}-conflict-${{ env.SCENARIO_ID }}" >> $GITHUB_ENV
+
+      - name: Create conflicting changes in test branch
+        run: |
+          git fetch origin ${{ env.TEST_BRANCH }}
+          git checkout ${{ env.TEST_BRANCH }}
+          
+          # Create a file that will conflict
+          echo "Test branch version of conflict file" > conflict.txt
+          echo "Line 2 from test branch" >> conflict.txt
+          git add conflict.txt
+          git commit -m "Add conflict.txt in test branch"
+          git push origin ${{ env.TEST_BRANCH }}
+
+      - name: Create feature branch with conflicting changes
+        run: |
+          git fetch origin ${{ env.BASE_BRANCH }} || git fetch origin main
+          git checkout ${{ env.BASE_BRANCH }} || git checkout main
+          git checkout -b ${{ env.FEATURE_BRANCH }}
+          
+          # Create commits that will conflict with test branch
+          echo "Feature branch version of conflict file" > conflict.txt
+          echo "Line 2 from feature branch" >> conflict.txt
+          git add conflict.txt
+          git commit -m "Add conflict.txt in feature branch - will conflict"
+          
+          echo "Non-conflicting content" > noconflict.txt
+          git add noconflict.txt
+          git commit -m "Add noconflict.txt - should succeed"
+          
+          git push origin ${{ env.FEATURE_BRANCH }}
+
+      - name: Create pull request
+        run: |
+          gh pr create \
+            --base ${{ env.BASE_BRANCH }} \
+            --head ${{ env.FEATURE_BRANCH }} \
+            --title "[Test Scenario] Cherry-Pick Conflicts Test - ${{ env.SCENARIO_ID }}" \
+            --body "This PR tests cherry-pick conflict handling for UpdateTestBranch workflow.
+            
+            **Test Scenario**: Cherry-Pick Conflicts
+            **Expected**: Cherry-pick should fail on first commit due to conflicts
+            **Setup**: Test branch has conflicting changes to same file
+            
+            To test: Comment \`!update-test\` on this PR" \
+            --assignee ${{ github.actor }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update summary
+        run: |
+          echo "### ✅ Cherry-Pick Conflicts Scenario" >> $GITHUB_STEP_SUMMARY
+          echo "- Feature Branch: \`${{ env.FEATURE_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- PR created with 2 commits (1 conflicting)" >> $GITHUB_STEP_SUMMARY
+          echo "- Expected: Cherry-pick fails, manual resolution required" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  test_no_new_commits:
+    name: "Test: No New Commits Scenario"  
+    needs: setup_test_scenario
+    if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'no-new-commits')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup environment variables
+        run: |
+          echo "TEST_BRANCH=${{ needs.setup_test_scenario.outputs.test_branch }}" >> $GITHUB_ENV
+          echo "BASE_BRANCH=${{ needs.setup_test_scenario.outputs.base_branch }}" >> $GITHUB_ENV
+          echo "FEATURE_BRANCH=${{ env.FEATURE_BRANCH_PREFIX }}-nocommits-${{ env.SCENARIO_ID }}" >> $GITHUB_ENV
+          echo "FEATURE_TEST_BRANCH=${{ env.FEATURE_TEST_PREFIX }}${{ env.FEATURE_BRANCH_PREFIX }}-nocommits-${{ env.SCENARIO_ID }}" >> $GITHUB_ENV
+
+      - name: Create feature branch with commits
+        run: |
+          git fetch origin ${{ env.BASE_BRANCH }} || git fetch origin main
+          git checkout ${{ env.BASE_BRANCH }} || git checkout main
+          git checkout -b ${{ env.FEATURE_BRANCH }}
+          
+          # Create commits
+          echo "Content that will be picked" > picked.txt
+          git add picked.txt
+          git commit -m "Add picked.txt - will be pre-picked"
+          COMMIT1=$(git rev-parse HEAD)
+          
+          git push origin ${{ env.FEATURE_BRANCH }}
+          echo "COMMIT1=$COMMIT1" >> $GITHUB_ENV
+
+      - name: Create feature test branch with all commits already picked
+        run: |
+          git fetch origin ${{ env.TEST_BRANCH }}
+          git checkout ${{ env.TEST_BRANCH }}
+          git checkout -b ${{ env.FEATURE_TEST_BRANCH }}
+          
+          # Cherry-pick all commits to simulate no new commits scenario
+          git cherry-pick -x ${COMMIT1:0:7}
+          
+          git push origin ${{ env.FEATURE_TEST_BRANCH }}
+
+      - name: Create pull request
+        run: |
+          gh pr create \
+            --base ${{ env.BASE_BRANCH }} \
+            --head ${{ env.FEATURE_BRANCH }} \
+            --title "[Test Scenario] No New Commits Test - ${{ env.SCENARIO_ID }}" \
+            --body "This PR tests behavior when no new commits need cherry-picking for UpdateTestBranch workflow.
+            
+            **Test Scenario**: No New Commits
+            **Expected**: Workflow should detect no new commits and skip update
+            **Setup**: Feature test branch already has all commits
+            
+            To test: Comment \`!update-test\` on this PR" \
+            --assignee ${{ github.actor }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update summary
+        run: |
+          echo "### ✅ No New Commits Scenario" >> $GITHUB_STEP_SUMMARY
+          echo "- Feature Branch: \`${{ env.FEATURE_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Feature Test Branch: \`${{ env.FEATURE_TEST_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY  
+          echo "- PR created with 1 commit (already picked)" >> $GITHUB_STEP_SUMMARY
+          echo "- Expected: No new commits to cherry-pick, skip update" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  finalize_test_summary:
+    name: Generate Final Test Report
+    needs: [setup_test_scenario, test_basic_cherry_pick, test_already_picked_commits, test_cherry_pick_conflicts, test_no_new_commits]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate comprehensive test report
+        run: |
+          echo "## 🧪 UpdateTestBranch Comprehensive Test Scenario Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scenario ID:** ${{ env.SCENARIO_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Base Branch:** ${{ needs.setup_test_scenario.outputs.base_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Branch:** ${{ needs.setup_test_scenario.outputs.test_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Test Scenarios Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check job results and report status
+          if [ "${{ needs.test_basic_cherry_pick.result }}" = "success" ]; then
+            echo "✅ **Basic Cherry-Pick**: Ready for testing" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test_basic_cherry_pick.result }}" = "skipped" ]; then
+            echo "⏭️ **Basic Cherry-Pick**: Skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Basic Cherry-Pick**: Setup failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.test_already_picked_commits.result }}" = "success" ]; then
+            echo "✅ **Already Picked Commits**: Ready for testing" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test_already_picked_commits.result }}" = "skipped" ]; then
+            echo "⏭️ **Already Picked Commits**: Skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Already Picked Commits**: Setup failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.test_cherry_pick_conflicts.result }}" = "success" ]; then
+            echo "✅ **Cherry-Pick Conflicts**: Ready for testing" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test_cherry_pick_conflicts.result }}" = "skipped" ]; then
+            echo "⏭️ **Cherry-Pick Conflicts**: Skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Cherry-Pick Conflicts**: Setup failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.test_no_new_commits.result }}" = "success" ]; then
+            echo "✅ **No New Commits**: Ready for testing" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.test_no_new_commits.result }}" = "skipped" ]; then
+            echo "⏭️ **No New Commits**: Skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **No New Commits**: Setup failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### How to Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Navigate to the created PRs** for each test scenario" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Comment \`!update-test\`** on each PR to trigger UpdateTestBranch workflow" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Observe the behavior** and verify it matches the expected results" >> $GITHUB_STEP_SUMMARY
+          echo "4. **Check the created test PRs** to validate cherry-pick results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Expected Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Basic Cherry-Pick**: All 3 commits successfully cherry-picked" >> $GITHUB_STEP_SUMMARY
+          echo "- **Already Picked**: Only 1 new commit cherry-picked (2 skipped)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Conflicts**: Cherry-pick fails, manual resolution comment posted" >> $GITHUB_STEP_SUMMARY
+          echo "- **No New Commits**: Workflow skips with 'no new commits' message" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Notes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- This test scenario is **self-contained** and **repeatable**" >> $GITHUB_STEP_SUMMARY
+          echo "- **DocumentMergedCommits workflow is ignored** (no longer needed)" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests work with **any base branch** via workflow input" >> $GITHUB_STEP_SUMMARY
+          echo "- Each run creates **unique branches** using run number ${{ env.SCENARIO_ID }}" >> $GITHUB_STEP_SUMMARY
