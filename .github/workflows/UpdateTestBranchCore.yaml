@@ -20,21 +20,6 @@ on:
         required: false
         type: string
         default: 'test/'
-      bot_label:
-        description: 'Label to apply to created PRs'
-        required: false
-        type: string
-        default: 'Automated'
-      use_github_token:
-        description: 'Whether to use GITHUB_TOKEN instead of GHTOKENWORKFLOW'
-        required: false
-        type: boolean
-        default: false
-      pr_exists:
-        description: 'Whether a PR already exists (checked by wrapper workflow)'
-        required: false
-        type: boolean
-        default: false
     outputs:
       cherry_pick_success:
         description: 'Whether cherry-pick was successful'
@@ -54,10 +39,7 @@ on:
       skip_all:
         description: 'Whether the workflow was skipped due to errors or no commits'
         value: ${{ jobs.update_test_branch.outputs.skip_all }}
-    secrets:
-      GHTOKENWORKFLOW:
-        description: 'GitHub token for workflow operations'
-        required: false
+
   workflow_dispatch:
     inputs:
       test_branch:
@@ -77,25 +59,8 @@ on:
         required: false
         type: string
         default: 'test/'
-      bot_label:
-        description: 'Label to apply to created PRs'
-        required: false
-        type: string
-        default: 'Automated'
-      use_github_token:
-        description: 'Whether to use GITHUB_TOKEN instead of GHTOKENWORKFLOW'
-        required: false
-        type: boolean
-        default: false
-      pr_exists:
-        description: 'Whether a PR already exists (checked by wrapper workflow)'
-        required: false
-        type: boolean
-        default: false
-
 permissions:
   contents: write
-  pull-requests: write
 
 env:
   SKIP_ALL: false
@@ -139,32 +104,16 @@ jobs:
           TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
           FEATURE_TEST_PREFIX_INPUT: ${{ inputs.feature_test_prefix }}
           FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
-          BOT_LABEL_INPUT: ${{ inputs.bot_label }}
           BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
         run: |
           # Sanitize inputs to prevent code injection
           printf 'TEST_BRANCH=%s\n' "${TEST_BRANCH_INPUT}" >> $GITHUB_ENV
           printf 'FEATURE_TEST_PREFIX=%s\n' "${FEATURE_TEST_PREFIX_INPUT}" >> $GITHUB_ENV  
           printf 'FEATURE_TEST_BRANCH=%s%s\n' "${FEATURE_TEST_PREFIX_INPUT}" "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
-          printf 'BOT_LABEL=%s\n' "${BOT_LABEL_INPUT}" >> $GITHUB_ENV
           printf 'HEAD_REF=%s\n' "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
           printf 'BASE_REF=%s\n' "${BASE_BRANCH_INPUT}" >> $GITHUB_ENV
 
-      - name: Setup GH_TOKEN
-        if: ${{ env.SKIP_ALL == 'false' && inputs.use_github_token == false }}
-        run: |
-          token='${{ secrets.GHTOKENWORKFLOW }}'
-          if [ -z "$token" ]; then
-            echo "SKIP_ALL=true" >> $GITHUB_ENV
-            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
-            exit 1
-          fi
-          echo "GH_TOKEN=$token" >> $GITHUB_ENV
 
-      - name: Use GitHub Token
-        if: ${{ env.SKIP_ALL == 'false' && inputs.use_github_token == true }}
-        run: |
-          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
 
       - name: Check branch settings
         if: ${{ env.SKIP_ALL == 'false' }}

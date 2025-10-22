@@ -169,11 +169,7 @@ jobs:
       feature_branch: ${{ needs.prepare_update.outputs.feature_branch }}
       base_branch: ${{ needs.prepare_update.outputs.base_branch }}
       feature_test_prefix: ${{ needs.prepare_update.outputs.feature_test_prefix }}
-      bot_label: ${{ needs.prepare_update.outputs.bot_label }}
-      use_github_token: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
-      pr_exists: ${{ needs.check_existing_pr.outputs.pr_exists == 'true' }}
-    secrets:
-      GHTOKENWORKFLOW: ${{ secrets.GHTOKENWORKFLOW }}
+
 
   create_update_pr:
     name: Create/Update Pull Request
