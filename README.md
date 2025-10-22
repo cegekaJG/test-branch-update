@@ -113,9 +113,6 @@ The core cherry-picking workflow that is independent of PR context. This workflo
 ### SetupTestScenario.yaml  
 Comprehensive test scenario generator for validating UpdateTestBranch functionality.
 
-### DocumentMergedCommits.yaml
-**DISABLED**: This workflow is no longer needed as UpdateTestBranch no longer relies on PR comments for tracking cherry-picked commits.
-
 ## New Architecture Benefits
 
 ✅ **Modularity**: Core cherry-picking logic is separate from PR comment handling  
