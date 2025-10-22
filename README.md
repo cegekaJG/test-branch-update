@@ -51,6 +51,7 @@ The core `UpdateTestBranchCore` workflow can also be triggered manually:
    - **feature_test_prefix**: Prefix for test branches (default: `test/`)
    - **bot_label**: PR label (default: `Automated`)
    - **use_github_token**: Use GITHUB_TOKEN vs GHTOKENWORKFLOW
+   - **pr_exists**: Whether a PR already exists (default: `false`)
 
 This allows direct testing of the cherry-picking logic without PR comments.
 
@@ -73,6 +74,7 @@ jobs:
       feature_test_prefix: "test/"
       bot_label: "Automated"
       use_github_token: true
+      pr_exists: false  # Optional: whether PR already exists (default: false)
     secrets:
       GHTOKENWORKFLOW: ${{ secrets.GHTOKENWORKFLOW }}
 ```
@@ -107,8 +109,9 @@ The core cherry-picking workflow that is independent of PR context. This workflo
 - **Can be called by other workflows** via `workflow_call`
 - **Can be triggered manually** via `workflow_dispatch` 
 - Takes all necessary parameters as inputs (no dependency on secrets/variables)
-- Focuses solely on cherry-picking commits and creating test PRs
+- Focuses solely on git operations (cherry-picking commits) and PR creation/updates
 - **Reusable** and **testable** in isolation
+- **Note**: GitHub API operations like checking for existing PRs are handled by the wrapper workflow for proper separation of concerns
 
 ### SetupTestScenario.yaml  
 Comprehensive test scenario generator for validating UpdateTestBranch functionality.
