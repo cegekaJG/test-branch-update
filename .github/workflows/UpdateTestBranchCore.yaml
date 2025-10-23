@@ -20,20 +20,7 @@ on:
         required: false
         type: string
         default: 'test/'
-      bot_label:
-        description: 'Label to apply to created PRs'
-        required: false
-        type: string
-        default: 'Automated'
-      use_github_token:
-        description: 'Whether to use GITHUB_TOKEN instead of GHTOKENWORKFLOW'
-        required: false
-        type: boolean
-        default: false
     outputs:
-      test_pr_url:
-        description: 'URL of the created/updated test PR'
-        value: ${{ jobs.update_test_branch.outputs.test_pr_url }}
       cherry_pick_success:
         description: 'Whether cherry-pick was successful'
         value: ${{ jobs.update_test_branch.outputs.cherry_pick_success }}
@@ -46,10 +33,13 @@ on:
       missing_commits:
         description: 'List of commits that failed to be picked'
         value: ${{ jobs.update_test_branch.outputs.missing_commits }}
-    secrets:
-      GHTOKENWORKFLOW:
-        description: 'GitHub token for workflow operations'
-        required: false
+      no_changes:
+        description: 'Whether there were no changes to commit'
+        value: ${{ jobs.update_test_branch.outputs.no_changes }}
+      skip_all:
+        description: 'Whether the workflow was skipped due to errors or no commits'
+        value: ${{ jobs.update_test_branch.outputs.skip_all }}
+
   workflow_dispatch:
     inputs:
       test_branch:
@@ -69,20 +59,8 @@ on:
         required: false
         type: string
         default: 'test/'
-      bot_label:
-        description: 'Label to apply to created PRs'
-        required: false
-        type: string
-        default: 'Automated'
-      use_github_token:
-        description: 'Whether to use GITHUB_TOKEN instead of GHTOKENWORKFLOW'
-        required: false
-        type: boolean
-        default: false
-
 permissions:
   contents: write
-  pull-requests: write
 
 env:
   SKIP_ALL: false
@@ -91,18 +69,18 @@ env:
   ADDED_COMMITS: ''
   NO_CHANGES: false
   MISSING_COMMITS: ''
-  TEST_PR_URL: ''
 
 jobs:
   update_test_branch:
     name: Update Test Branch
     runs-on: ubuntu-latest
     outputs:
-      test_pr_url: ${{ env.TEST_PR_URL }}
       cherry_pick_success: ${{ steps.cherry_pick.outcome == 'success' }}
       feature_test_branch: ${{ env.FEATURE_TEST_BRANCH }}
       picked_commits: ${{ env.PICKED_COMMITS }}
       missing_commits: ${{ env.MISSING_COMMITS }}
+      no_changes: ${{ env.NO_CHANGES }}
+      skip_all: ${{ env.SKIP_ALL }}
     steps:
       - name: Set up Git
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -126,32 +104,16 @@ jobs:
           TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
           FEATURE_TEST_PREFIX_INPUT: ${{ inputs.feature_test_prefix }}
           FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
-          BOT_LABEL_INPUT: ${{ inputs.bot_label }}
           BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
         run: |
           # Sanitize inputs to prevent code injection
           printf 'TEST_BRANCH=%s\n' "${TEST_BRANCH_INPUT}" >> $GITHUB_ENV
           printf 'FEATURE_TEST_PREFIX=%s\n' "${FEATURE_TEST_PREFIX_INPUT}" >> $GITHUB_ENV  
           printf 'FEATURE_TEST_BRANCH=%s%s\n' "${FEATURE_TEST_PREFIX_INPUT}" "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
-          printf 'BOT_LABEL=%s\n' "${BOT_LABEL_INPUT}" >> $GITHUB_ENV
           printf 'HEAD_REF=%s\n' "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
           printf 'BASE_REF=%s\n' "${BASE_BRANCH_INPUT}" >> $GITHUB_ENV
 
-      - name: Setup GH_TOKEN
-        if: ${{ env.SKIP_ALL == 'false' && inputs.use_github_token == false }}
-        run: |
-          token='${{ secrets.GHTOKENWORKFLOW }}'
-          if [ -z "$token" ]; then
-            echo "SKIP_ALL=true" >> $GITHUB_ENV
-            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
-            exit 1
-          fi
-          echo "GH_TOKEN=$token" >> $GITHUB_ENV
 
-      - name: Use GitHub Token
-        if: ${{ env.SKIP_ALL == 'false' && inputs.use_github_token == true }}
-        run: |
-          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
 
       - name: Check branch settings
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -452,67 +414,6 @@ jobs:
           git push origin "${FEATURE_TEST_BRANCH}"
           echo "NO_CHANGES=false" >> $GITHUB_ENV
 
-      - name: Look for existing update PR
-        id: check_existing_pr
-        if: ${{ env.SKIP_ALL == 'false' }}
-        env:
-          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
-        run: |
-          if [ $(gh pr list --base "${TEST_BRANCH_INPUT}" --head "${FEATURE_TEST_BRANCH}" --state open | wc -l) -gt 0 ]; then
-            echo "PR already exists."
-            echo "NO_CHANGES=false" >> $GITHUB_ENV
-            echo "PR_EXISTS=true" >> $GITHUB_OUTPUT
-          else
-            echo "No PR of ${FEATURE_TEST_BRANCH} to ${TEST_BRANCH_INPUT} found."
-            echo "PR_EXISTS=false" >> $GITHUB_OUTPUT
-          fi
 
-      - name: Ensure bot label exists
-        if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
-        env:
-          BOT_LABEL_INPUT: ${{ inputs.bot_label }}
-        run: |
-          if [ -z "$(gh label list --search "${BOT_LABEL_INPUT}" --limit 1)" ]; then
-            gh label create "${BOT_LABEL_INPUT}" --color CCCCCC --description "Automated pull requests"
-            echo "::notice::Label ${BOT_LABEL_INPUT} added to repository."
-          fi
 
-      - name: Create/Update pull request
-        if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
-        env:
-          FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
-          BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
-          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
-          BOT_LABEL_INPUT: ${{ inputs.bot_label }}
-        run: |
-          feature_title="Test branch for ${FEATURE_BRANCH_INPUT}"
-          echo "PR title: ${feature_title}"
-          body="This automated pull request adds the cherry-picked changes from \`${FEATURE_BRANCH_INPUT}\` to \`${TEST_BRANCH_INPUT}\`.
 
-          **Feature Branch**: \`${FEATURE_BRANCH_INPUT}\`
-          **Base Branch**: \`${BASE_BRANCH_INPUT}\`
-          **Test Branch**: \`${TEST_BRANCH_INPUT}\`"
-          
-          if [ ${{ steps.check_existing_pr.outputs.PR_EXISTS }} == 'false' ]; then
-            TEST_PR_URL=$(gh pr create \
-              --base "${TEST_BRANCH_INPUT}" \
-              --head "${FEATURE_TEST_BRANCH}" \
-              --title "${feature_title}" \
-              --label "${BOT_LABEL_INPUT}" \
-              --body "${body}")
-            echo "::notice::${TEST_PR_URL} created."
-          else
-            TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
-              --body "${body}")
-            echo "::notice::${TEST_PR_URL} updated."
-          fi
-          echo "TEST_PR_URL=${TEST_PR_URL}" >> $GITHUB_ENV
-
-      - name: Set pull request status
-        if: ${{ env.SKIP_ALL == 'false' &&  env.NO_CHANGES == 'false' }}
-        run: |
-          if [ '${{ steps.cherry_pick.outcome }}' == "success" ]; then
-            gh pr ready "${FEATURE_TEST_BRANCH}"
-          else
-            gh pr ready --undo "${FEATURE_TEST_BRANCH}"
-          fi
