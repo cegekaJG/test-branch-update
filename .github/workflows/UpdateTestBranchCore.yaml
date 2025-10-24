@@ -193,13 +193,24 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' && steps.check_feat_test.outputs.SKIP_CHERRY_LIST == 'false' }}
         env:
           TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
+          BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
+          FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
         run: |
           git fetch origin "${TEST_BRANCH_INPUT}"
           git fetch origin "${FEATURE_TEST_BRANCH}"
+          git fetch origin "${BASE_BRANCH_INPUT}"
+          git fetch origin "${FEATURE_BRANCH_INPUT}"
+
+          # Find the merge base between base branch and feature branch to determine when feature branch was created
+          merge_base=$(git merge-base "origin/${BASE_BRANCH_INPUT}" "origin/${FEATURE_BRANCH_INPUT}")
+          echo "::debug::Merge base between ${BASE_BRANCH_INPUT} and ${FEATURE_BRANCH_INPUT}: $merge_base"
 
           commit_separator=$'\001'
           commit_separator_esc='\\001'
-          feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "origin/${TEST_BRANCH_INPUT}..origin/${FEATURE_TEST_BRANCH}")
+          # Only examine commits in feature test branch that came after the feature branch was created.
+          # This optimization filters out commits that were made before the feature branch creation,
+          # since only commits made after the feature branch existed can contain cherry-picks from it.
+          feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "${merge_base}..origin/${FEATURE_TEST_BRANCH}" --ancestry-path)
 
           if [ -z "$feature_test_bodies" ]; then
             echo "::notice::No new commits in \"$feature_test_branch\" found."
