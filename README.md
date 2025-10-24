@@ -39,5 +39,22 @@ jobs:
       feature_test_prefix: "test/"
 ```
 
+### SetupTestScenario.yaml
+**Local Testing Workflow**: Comprehensive testing workflow for UpdateTestBranchCore functionality. This workflow:
+- **Uses only UpdateTestBranchCore** - directly calls the core workflow instead of the PR-based wrapper
+- **No remote operations** - all test branches and commits are created locally only
+- **No PR creation** - eliminates dependency on pull requests and GitHub tokens
+- **Self-contained testing** - each scenario validates UpdateTestBranchCore behavior independently
+- Tests all major scenarios: basic cherry-pick, already-picked commits, conflicts, and no-new-commits
+
+#### Usage
+Can be triggered manually via `workflow_dispatch` to test UpdateTestBranchCore functionality:
+
+```yaml
+# Manual trigger example
+# Navigate to Actions → Setup Test Scenario → Run workflow
+# Select base branch (default: main) and test scenario (default: all)
+```
+
 ### DocumentMergedCommits.yaml
 **DISABLED**: This workflow is no longer needed as UpdateTestBranch no longer relies on PR comments for tracking cherry-picked commits.
