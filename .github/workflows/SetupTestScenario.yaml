@@ -581,7 +581,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Key Improvements:**" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **No remote branch/commit pushes** - all testing done without remote operations" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **No PR creation** - direct UpdateTestBranchCore workflow calls" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Direct workflow calls** - UpdateTestBranchCore executed directly" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Isolated test environment** - each scenario creates independent branches" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ **Comprehensive validation** - results validated within the same workflow run" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
