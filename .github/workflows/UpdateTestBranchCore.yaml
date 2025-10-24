@@ -193,24 +193,32 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' && steps.check_feat_test.outputs.SKIP_CHERRY_LIST == 'false' }}
         env:
           TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
-          BASE_BRANCH_INPUT: ${{ inputs.base_branch }}
           FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
         run: |
           git fetch origin "${TEST_BRANCH_INPUT}"
           git fetch origin "${FEATURE_TEST_BRANCH}"
-          git fetch origin "${BASE_BRANCH_INPUT}"
           git fetch origin "${FEATURE_BRANCH_INPUT}"
 
-          # Find the merge base between base branch and feature branch to determine when feature branch was created
-          merge_base=$(git merge-base "origin/${BASE_BRANCH_INPUT}" "origin/${FEATURE_BRANCH_INPUT}")
-          echo "::debug::Merge base between ${BASE_BRANCH_INPUT} and ${FEATURE_BRANCH_INPUT}: $merge_base"
-
+          # Get the timestamp of the earliest commit in the feature branch to use as cutoff point.
+          # Since we're dealing with two separate histories (test branch and feature branch),
+          # we use commit timestamps to determine which commits in the test feature branch 
+          # could potentially contain cherry-picks from the feature branch.
+          earliest_feature_timestamp=$(git log --reverse --pretty=format:"%ct" "origin/${BASE_REF}..origin/${FEATURE_BRANCH_INPUT}" | head -1)
+          
           commit_separator=$'\001'
           commit_separator_esc='\\001'
-          # Only examine commits in feature test branch that came after the feature branch was created.
-          # This optimization filters out commits that were made before the feature branch creation,
-          # since only commits made after the feature branch existed can contain cherry-picks from it.
-          feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "${merge_base}..origin/${FEATURE_TEST_BRANCH}" --ancestry-path)
+          
+          if [ -n "$earliest_feature_timestamp" ]; then
+            echo "::debug::Earliest feature branch commit timestamp: $earliest_feature_timestamp ($(date -d @$earliest_feature_timestamp))"
+            # Compare test feature branch with base branch (not test branch) to see all cherry-picked commits
+            # (both merged and unmerged). Filter by timestamp to only examine commits made after
+            # the earliest feature branch commit, since cherry-picks must occur after the original commits.
+            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" --since="@$earliest_feature_timestamp" "origin/${BASE_REF}..origin/${FEATURE_TEST_BRANCH}")
+          else
+            echo "::debug::No feature branch commits found, examining all test feature branch commits"
+            # Fallback: compare test feature branch with base branch to see all cherry-picked commits
+            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "origin/${BASE_REF}..origin/${FEATURE_TEST_BRANCH}")
+          fi
 
           if [ -z "$feature_test_bodies" ]; then
             echo "::notice::No new commits in \"$feature_test_branch\" found."
