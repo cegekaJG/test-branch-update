@@ -163,6 +163,8 @@ jobs:
     name: "Test: Basic Cherry-Pick Scenario"
     needs: [setup_test_scenario, setup_basic_cherry_pick]
     if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'basic-cherry-pick')
+    permissions:
+      contents: write
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
       test_branch: ${{ needs.setup_basic_cherry_pick.outputs.test_branch }}
@@ -315,6 +317,8 @@ jobs:
     name: "Test: Already Picked Commits Scenario"
     needs: [setup_test_scenario, setup_already_picked_commits]
     if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'already-picked-commits')
+    permissions:
+      contents: write
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
       test_branch: ${{ needs.setup_already_picked_commits.outputs.test_branch }}
@@ -450,6 +454,8 @@ jobs:
     name: "Test: Cherry-Pick Conflicts Scenario"
     needs: [setup_test_scenario, setup_cherry_pick_conflicts]
     if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'cherry-pick-conflicts')
+    permissions:
+      contents: write
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
       test_branch: ${{ needs.setup_cherry_pick_conflicts.outputs.test_branch }}
@@ -601,6 +607,8 @@ jobs:
     name: "Test: No New Commits Scenario"
     needs: [setup_test_scenario, setup_no_new_commits]
     if: contains(fromJson(needs.setup_test_scenario.outputs.scenarios), 'no-new-commits')
+    permissions:
+      contents: write
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
       test_branch: ${{ needs.setup_no_new_commits.outputs.test_branch }}
