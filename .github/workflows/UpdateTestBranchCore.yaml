@@ -204,7 +204,6 @@ jobs:
           earliest_feature_timestamp=$(git log --reverse --pretty=format:"%ct" "origin/${BASE_REF}..origin/${FEATURE_BRANCH_INPUT}" | head -1)
 
           commit_separator=$'\001'
-          commit_separator_esc='\\001'
 
           if [ -n "$earliest_feature_timestamp" ]; then
             echo "::debug::Earliest feature branch commit timestamp: $earliest_feature_timestamp ($(date -d @$earliest_feature_timestamp))"
@@ -223,24 +222,27 @@ jobs:
           fi
 
           feature_test_bodies=${feature_test_bodies%$commit_separator}
-          feature_test_bodies=$(printf "%q" "$feature_test_bodies" | sed "s/$commit_separator_esc/$commit_separator/g")
 
           picked_commits=()
           IFS=$commit_separator
           for msg in $feature_test_bodies; do
             echo "::debug::Full message:"
             echo "::debug::$msg"
-            commit=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))' | tail -n 1)
-            if [[ -z "$commit" ]]; then
+            # Find all cherry-pick notices in the message (handles squash commits with multiple cherry-picks)
+            commits=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))')
+            if [[ -z "$commits" ]]; then
               continue
             fi
-            if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
-              commit=${commit:0:8}
-              picked_commits+=("$commit")
-              echo "::debug::Commit $commit found."
-            else
-              echo "::debug::Commit $commit not found in the repository."
-            fi
+            # Process each cherry-picked commit found
+            while IFS= read -r commit; do
+              if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
+                commit=${commit:0:8}
+                picked_commits+=("$commit")
+                echo "::debug::Commit $commit found."
+              else
+                echo "::debug::Commit $commit not found in the repository."
+              fi
+            done <<< "$commits"
           done
           unset IFS
 
