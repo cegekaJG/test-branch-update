@@ -113,8 +113,6 @@ jobs:
           printf 'HEAD_REF=%s\n' "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
           printf 'BASE_REF=%s\n' "${BASE_BRANCH_INPUT}" >> $GITHUB_ENV
 
-
-
       - name: Check branch settings
         if: ${{ env.SKIP_ALL == 'false' }}
         env:
@@ -175,33 +173,33 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
 
-      - name: Check if feature test branch exists
+      - name: Checkout feature test branch
         id: check_feat_test
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
           if git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$"; then
             echo "Branch $feature_test_branch found."
-            echo "SKIP_CHERRY_LIST=false" >> $GITHUB_OUTPUT
+            git fetch origin "$feature_test_branch"
+            git checkout "$feature_test_branch"
           else
             echo "No branch $feature_test_branch found."
-            echo "SKIP_CHERRY_LIST=true" >> $GITHUB_OUTPUT
+            git checkout -b "$feature_test_branch" "origin/${{ inputs.test_branch }}"
           fi
 
       - name: Get list of already cherry-picked commits
         id: get_cherry_picked_commits
-        if: ${{ env.SKIP_ALL == 'false' && steps.check_feat_test.outputs.SKIP_CHERRY_LIST == 'false' }}
+        if: ${{ env.SKIP_ALL == 'false' }}
         env:
           TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
           FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
         run: |
           git fetch origin "${TEST_BRANCH_INPUT}"
-          git fetch origin "${FEATURE_TEST_BRANCH}"
           git fetch origin "${FEATURE_BRANCH_INPUT}"
 
           # Get the timestamp of the earliest commit in the feature branch to use as cutoff point.
           # Since we're dealing with two separate histories (test branch and feature branch),
-          # we use commit timestamps to determine which commits in the test feature branch 
+          # we use commit timestamps to determine which commits in the test feature branch
           # could potentially contain cherry-picks from the feature branch.
           earliest_feature_timestamp=$(git log --reverse --pretty=format:"%ct" "origin/${BASE_REF}..origin/${FEATURE_BRANCH_INPUT}" | head -1)
           
@@ -305,21 +303,6 @@ jobs:
             done
             echo "EOF"
           } >> $GITHUB_ENV
-
-      - name: Create/Checkout feature test branch
-        if: ${{ env.SKIP_ALL == 'false' }}
-        env:
-          TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
-        run: |
-          git fetch origin "${TEST_BRANCH_INPUT}"
-
-          if git ls-remote --heads origin | grep -q "refs/heads/${FEATURE_TEST_BRANCH}$"; then
-            git fetch origin "${FEATURE_TEST_BRANCH}"
-            git checkout "${FEATURE_TEST_BRANCH}"
-          else
-            git checkout "${TEST_BRANCH_INPUT}"
-            git checkout -b "${FEATURE_TEST_BRANCH}"
-          fi
 
       - name: Cherry-pick new commits
         continue-on-error: true
