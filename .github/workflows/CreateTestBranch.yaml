@@ -81,51 +81,32 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/actions/variables/UPDATETESTBRANCH_TEST_BRANCH \
-            -f name='UPDATETESTBRANCH_TEST_BRANCH' \
-            -f value='${{ steps.sanitize.outputs.test_branch_name }}' || \
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/actions/variables \
-            -f name='UPDATETESTBRANCH_TEST_BRANCH' \
-            -f value='${{ steps.sanitize.outputs.test_branch_name }}'
-
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/actions/variables/UPDATETESTBRANCH_FEATURE_TEST_PREFIX \
-            -f name='UPDATETESTBRANCH_FEATURE_TEST_PREFIX' \
-            -f value='${{ steps.sanitize.outputs.test_prefix }}' || \
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/actions/variables \
-            -f name='UPDATETESTBRANCH_FEATURE_TEST_PREFIX' \
-            -f value='${{ steps.sanitize.outputs.test_prefix }}'
-
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/actions/variables/UPDATETESTBRANCH_BOT_LABEL \
-            -f name='UPDATETESTBRANCH_BOT_LABEL' \
-            -f value='${{ steps.sanitize.outputs.bot_label }}' || \
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/actions/variables \
-            -f name='UPDATETESTBRANCH_BOT_LABEL' \
-            -f value='${{ steps.sanitize.outputs.bot_label }}'
-
+          # Function to update or create a repository variable
+          update_variable() {
+            local var_name=$1
+            local var_value=$2
+            
+            gh api \
+              --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/actions/variables/${var_name} \
+              -f name="${var_name}" \
+              -f value="${var_value}" || \
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/actions/variables \
+              -f name="${var_name}" \
+              -f value="${var_value}"
+          }
+          
+          # Update all variables
+          update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch_name }}"
+          update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
+          update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
+          
           echo "::notice::Repository variables updated successfully"
 
       - name: Ensure bot label exists
@@ -208,13 +189,14 @@ jobs:
           # Process each PR using process substitution to avoid subshell
           while read -r pr; do
             pr_number=$(echo "$pr" | jq -r '.number')
-            assignees=$(echo "$pr" | jq -r '.assignees[].login' 2>/dev/null || true)
             
-            # Build assignee mentions
+            # Build assignee mentions - get assignees as array
+            mapfile -t assignee_logins < <(echo "$pr" | jq -r '.assignees[].login' 2>/dev/null || true)
+            
             mentions=""
-            if [ -n "$assignees" ]; then
-              for assignee in $assignees; do
-                mentions="${mentions}@${assignee} "
+            if [ ${#assignee_logins[@]} -gt 0 ]; then
+              for assignee in "${assignee_logins[@]}"; do
+                [ -n "$assignee" ] && mentions="${mentions}@${assignee} "
               done
             fi
             
