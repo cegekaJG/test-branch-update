@@ -202,20 +202,20 @@ jobs:
           # we use commit timestamps to determine which commits in the test feature branch
           # could potentially contain cherry-picks from the feature branch.
           earliest_feature_timestamp=$(git log --reverse --pretty=format:"%ct" "origin/${BASE_REF}..origin/${FEATURE_BRANCH_INPUT}" | head -1)
-          
+
           commit_separator=$'\001'
           commit_separator_esc='\\001'
-          
+
           if [ -n "$earliest_feature_timestamp" ]; then
             echo "::debug::Earliest feature branch commit timestamp: $earliest_feature_timestamp ($(date -d @$earliest_feature_timestamp))"
             # Compare test feature branch with base branch (not test branch) to see all cherry-picked commits
             # (both merged and unmerged). Filter by timestamp to only examine commits made after
             # the earliest feature branch commit, since cherry-picks must occur after the original commits.
-            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" --since="@$earliest_feature_timestamp" "origin/${BASE_REF}..origin/${FEATURE_TEST_BRANCH}")
+            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" --since="@$earliest_feature_timestamp" "origin/${BASE_REF}..${FEATURE_TEST_BRANCH}")
           else
             echo "::debug::No feature branch commits found, examining all test feature branch commits"
             # Fallback: compare test feature branch with base branch to see all cherry-picked commits
-            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "origin/${BASE_REF}..origin/${FEATURE_TEST_BRANCH}")
+            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "origin/${BASE_REF}..${FEATURE_TEST_BRANCH}")
           fi
 
           if [ -z "$feature_test_bodies" ]; then
