@@ -205,10 +205,10 @@ jobs:
           pr_count=$(echo "$prs" | jq '. | length')
           echo "Found $pr_count open PRs targeting ${BASE_BRANCH}"
           
-          # Process each PR
-          echo "$prs" | jq -c '.[]' | while read -r pr; do
+          # Process each PR using process substitution to avoid subshell
+          while read -r pr; do
             pr_number=$(echo "$pr" | jq -r '.number')
-            assignees=$(echo "$pr" | jq -r '.assignees[].login')
+            assignees=$(echo "$pr" | jq -r '.assignees[].login' 2>/dev/null || true)
             
             # Build assignee mentions
             mentions=""
@@ -219,29 +219,23 @@ jobs:
             fi
             
             # Create comment body using cat with heredoc
+            assignee_line=""
             if [ -n "$mentions" ]; then
-              comment_body=$(cat <<EOF
-          ## Test Branch Reset Notification
-
-          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
-
-          **Assignees:** ${mentions}
-
-          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
-          EOF
-          )
-            else
-              comment_body=$(cat <<EOF
-          ## Test Branch Reset Notification
-
-          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
-
-          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
-          EOF
-          )
+              assignee_line="**Assignees:** ${mentions}"
             fi
+            
+            comment_body=$(cat <<EOF
+          ## Test Branch Reset Notification
+
+          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
+          ${assignee_line:+
+          ${assignee_line}}
+
+          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
+          EOF
+          )
             
             # Post comment to PR
             gh pr comment "$pr_number" --body "$comment_body"
             echo "::notice::Posted notification comment to PR #${pr_number}"
-          done
+          done < <(echo "$prs" | jq -c '.[]')
