@@ -20,11 +20,9 @@ env:
 
 jobs:
   prepare_and_setup:
-    name: Prepare Update and Setup
+    name: Initialize Update
     runs-on: ubuntu-latest
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       test_branch: ${{ steps.set_config.outputs.TEST_BRANCH }}
       feature_branch: ${{ steps.get_pr_info.outputs.HEAD_REF }}
@@ -48,6 +46,25 @@ jobs:
 
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
+
+      - name: Setup GH_TOKEN
+        id: setup_token
+        run: |
+          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME || 'GHTOKENWORKFLOW' }}"
+          echo "Token name: ${token_name}"
+
+          if [ -z "${token_name}" ] || [ "${token_name}" = "GITHUB_TOKEN" ]; then
+            echo "Using GITHUB_TOKEN"
+            echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+          else
+            echo "Using custom token: ${token_name}"
+            custom_token="${{ secrets.GHTOKENWORKFLOW }}"
+            if [ -z "${custom_token}" ]; then
+              echo "::error::The secret '${token_name}' is required but has no value."
+              exit 1
+            fi
+            echo "GH_TOKEN=${custom_token}" >> $GITHUB_ENV
+          fi
 
       - name: Get PR information
         id: get_pr_info
@@ -125,13 +142,26 @@ jobs:
     needs: [prepare_and_setup, call_core_workflow]
     runs-on: ubuntu-latest
     if: needs.call_core_workflow.outputs.skip_all == 'false' && needs.call_core_workflow.outputs.no_changes == 'false'
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       test_pr_url: ${{ steps.create_pr.outputs.TEST_PR_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup GH_TOKEN
+        run: |
+          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME || 'GHTOKENWORKFLOW' }}"
+
+          if [ -z "${token_name}" ] || [ "${token_name}" = "GITHUB_TOKEN" ]; then
+            echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+          else
+            custom_token="${{ secrets.GHTOKENWORKFLOW }}"
+            if [ -z "${custom_token}" ]; then
+              echo "::error::The secret '${token_name}' is required but has no value."
+              exit 1
+            fi
+            echo "GH_TOKEN=${custom_token}" >> $GITHUB_ENV
+          fi
 
       - name: Create/Update pull request
         id: create_pr
@@ -260,10 +290,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup GH_TOKEN
+        run: |
+          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME || 'GHTOKENWORKFLOW' }}"
+
+          if [ -z "${token_name}" ] || [ "${token_name}" = "GITHUB_TOKEN" ]; then
+            echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+          else
+            custom_token="${{ secrets.GHTOKENWORKFLOW }}"
+            if [ -z "${custom_token}" ]; then
+              echo "::error::The secret '${token_name}' is required but has no value."
+              exit 1
+            fi
+            echo "GH_TOKEN=${custom_token}" >> $GITHUB_ENV
+          fi
+
       - name: Comment on test PR (on failure)
         if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.prepare_and_setup.outputs.disable_comments == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
@@ -289,7 +333,6 @@ jobs:
       - name: Comment on original PR
         if: needs.prepare_and_setup.outputs.disable_comments == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FEATURE_BRANCH: ${{ needs.prepare_and_setup.outputs.feature_branch }}
           TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
           TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
