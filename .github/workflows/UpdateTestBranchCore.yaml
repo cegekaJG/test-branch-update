@@ -204,7 +204,6 @@ jobs:
           earliest_feature_timestamp=$(git log --reverse --pretty=format:"%ct" "origin/${BASE_REF}..origin/${FEATURE_BRANCH_INPUT}" | head -1)
 
           commit_separator=$'\001'
-          commit_separator_esc='\\001'
 
           if [ -n "$earliest_feature_timestamp" ]; then
             echo "::debug::Earliest feature branch commit timestamp: $earliest_feature_timestamp ($(date -d @$earliest_feature_timestamp))"
@@ -223,7 +222,6 @@ jobs:
           fi
 
           feature_test_bodies=${feature_test_bodies%$commit_separator}
-          feature_test_bodies=$(printf "%q" "$feature_test_bodies" | sed "s/$commit_separator_esc/$commit_separator/g")
 
           picked_commits=()
           IFS=$commit_separator

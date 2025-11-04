@@ -176,7 +176,6 @@ jobs:
           git fetch origin $feature_test_branch
 
           commit_separator=$'\001'
-          commit_separator_esc='\\001'
           feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" origin/$test_branch..origin/$feature_test_branch)
 
           if [ -z "$feature_test_bodies" ]; then
@@ -184,7 +183,6 @@ jobs:
           fi
 
           feature_test_bodies=${feature_test_bodies%$commit_separator}
-          feature_test_bodies=$(printf "%q" "$feature_test_bodies" | sed "s/$commit_separator_esc/$commit_separator/g")
 
           picked_commits=()
           IFS=$commit_separator
