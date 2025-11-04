@@ -17,23 +17,23 @@ env:
   COMMIT_COMMENT_TAG: <!-- UpdateTestBranch/COMMIT -->
   BOT_LABEL: Automated
   DISABLE_COMMENTS: false
-  USE_GITHUB_TOKEN: false
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  prepare_update:
-    name: Prepare Update Parameters
+  prepare_and_setup:
+    name: Prepare Update and Setup
     runs-on: ubuntu-latest
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       test_branch: ${{ steps.set_config.outputs.TEST_BRANCH }}
       feature_branch: ${{ steps.get_pr_info.outputs.HEAD_REF }}
       base_branch: ${{ steps.get_pr_info.outputs.BASE_REF }}
       feature_test_prefix: ${{ steps.set_config.outputs.FEATURE_TEST_PREFIX }}
       bot_label: ${{ steps.set_config.outputs.BOT_LABEL }}
-      use_github_token: ${{ steps.set_config.outputs.USE_GITHUB_TOKEN == 'true' }}
       disable_comments: ${{ steps.set_config.outputs.DISABLE_COMMENTS }}
       notice_comment_tag: ${{ steps.set_config.outputs.NOTICE_COMMENT_TAG }}
+      pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
     steps:
       - name: Add reaction to comment
         uses: peter-evans/create-or-update-comment@v4
@@ -80,46 +80,18 @@ jobs:
           echo "FEATURE_TEST_PREFIX=${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}" >> $GITHUB_OUTPUT
           echo "BOT_LABEL=${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}" >> $GITHUB_OUTPUT
           echo "DISABLE_COMMENTS=${{ vars.UPDATETESTBRANCH_DISABLE_COMMENTS || env.DISABLE_COMMENTS }}" >> $GITHUB_OUTPUT
-          echo "USE_GITHUB_TOKEN=${{ vars.UPDATETESTBRANCH_USE_GITHUB_TOKEN || env.USE_GITHUB_TOKEN }}" >> $GITHUB_OUTPUT
           echo "NOTICE_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_NOTICE_COMMENT_TAG || env.NOTICE_COMMENT_TAG }}" >> $GITHUB_OUTPUT
           echo "COMMIT_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_COMMIT_COMMENT_TAG || env.COMMIT_COMMENT_TAG }}" >> $GITHUB_OUTPUT
-
-  check_existing_pr:
-    name: Look for Existing Update PR
-    needs: prepare_update
-    runs-on: ubuntu-latest
-    outputs:
-      pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup GH_TOKEN
-        if: ${{ needs.prepare_update.outputs.use_github_token == 'false' }}
-        run: |
-          token='${{ secrets.GHTOKENWORKFLOW }}'
-          if [ -z "$token" ]; then
-            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
-            exit 1
-          fi
-          echo "GH_TOKEN=$token" >> $GITHUB_ENV
-
-      - name: Use GitHub Token
-        if: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
-        run: |
-          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
 
       - name: Look for existing update PR
         id: check_pr
         env:
-          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
-          FEATURE_BRANCH: ${{ needs.prepare_update.outputs.feature_branch }}
-          FEATURE_TEST_PREFIX: ${{ needs.prepare_update.outputs.feature_test_prefix }}
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+          FEATURE_TEST_PREFIX: ${{ steps.set_config.outputs.FEATURE_TEST_PREFIX }}
         run: |
           feature_test_branch="${FEATURE_TEST_PREFIX}${FEATURE_BRANCH}"
-          
+
           if [ $(gh pr list --base "${TEST_BRANCH}" --head "${feature_test_branch}" --state open | wc -l) -gt 0 ]; then
             echo "PR already exists."
             echo "PR_EXISTS=true" >> $GITHUB_OUTPUT
@@ -128,32 +100,9 @@ jobs:
             echo "PR_EXISTS=false" >> $GITHUB_OUTPUT
           fi
 
-  ensure_bot_label:
-    name: Ensure Bot Label Exists
-    needs: [prepare_update, check_existing_pr]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup GH_TOKEN
-        if: ${{ needs.prepare_update.outputs.use_github_token == 'false' }}
-        run: |
-          token='${{ secrets.GHTOKENWORKFLOW }}'
-          if [ -z "$token" ]; then
-            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
-            exit 1
-          fi
-          echo "GH_TOKEN=$token" >> $GITHUB_ENV
-
-      - name: Use GitHub Token
-        if: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
-        run: |
-          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
-
       - name: Ensure bot label exists
         env:
-          BOT_LABEL: ${{ needs.prepare_update.outputs.bot_label }}
+          BOT_LABEL: ${{ steps.set_config.outputs.BOT_LABEL }}
         run: |
           if [ -z "$(gh label list --search "${BOT_LABEL}" --limit 1)" ]; then
             gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"
@@ -162,50 +111,37 @@ jobs:
 
   call_core_workflow:
     name: Call Core Update Workflow
-    needs: [prepare_update, check_existing_pr, ensure_bot_label]
+    needs: prepare_and_setup
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
-      test_branch: ${{ needs.prepare_update.outputs.test_branch }}
-      feature_branch: ${{ needs.prepare_update.outputs.feature_branch }}
-      base_branch: ${{ needs.prepare_update.outputs.base_branch }}
-      feature_test_prefix: ${{ needs.prepare_update.outputs.feature_test_prefix }}
+      test_branch: ${{ needs.prepare_and_setup.outputs.test_branch }}
+      feature_branch: ${{ needs.prepare_and_setup.outputs.feature_branch }}
+      base_branch: ${{ needs.prepare_and_setup.outputs.base_branch }}
+      feature_test_prefix: ${{ needs.prepare_and_setup.outputs.feature_test_prefix }}
 
 
   create_update_pr:
     name: Create/Update Pull Request
-    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow]
+    needs: [prepare_and_setup, call_core_workflow]
     runs-on: ubuntu-latest
     if: needs.call_core_workflow.outputs.skip_all == 'false' && needs.call_core_workflow.outputs.no_changes == 'false'
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       test_pr_url: ${{ steps.create_pr.outputs.TEST_PR_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup GH_TOKEN
-        if: ${{ needs.prepare_update.outputs.use_github_token == 'false' }}
-        run: |
-          token='${{ secrets.GHTOKENWORKFLOW }}'
-          if [ -z "$token" ]; then
-            echo "::error::The GHTOKENWORKFLOW secret is required when use_github_token is false."
-            exit 1
-          fi
-          echo "GH_TOKEN=$token" >> $GITHUB_ENV
-
-      - name: Use GitHub Token
-        if: ${{ needs.prepare_update.outputs.use_github_token == 'true' }}
-        run: |
-          echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
-
       - name: Create/Update pull request
         id: create_pr
         env:
-          FEATURE_BRANCH: ${{ needs.prepare_update.outputs.feature_branch }}
-          BASE_BRANCH: ${{ needs.prepare_update.outputs.base_branch }}
-          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
-          BOT_LABEL: ${{ needs.prepare_update.outputs.bot_label }}
+          FEATURE_BRANCH: ${{ needs.prepare_and_setup.outputs.feature_branch }}
+          BASE_BRANCH: ${{ needs.prepare_and_setup.outputs.base_branch }}
+          TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
+          BOT_LABEL: ${{ needs.prepare_and_setup.outputs.bot_label }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          PR_EXISTS: ${{ needs.check_existing_pr.outputs.pr_exists }}
+          PR_EXISTS: ${{ needs.prepare_and_setup.outputs.pr_exists }}
         run: |
           feature_title="Test branch for ${FEATURE_BRANCH}"
           echo "PR title: ${feature_title}"
@@ -214,7 +150,7 @@ jobs:
           **Feature Branch**: \`${FEATURE_BRANCH}\`
           **Base Branch**: \`${BASE_BRANCH}\`
           **Test Branch**: \`${TEST_BRANCH}\`"
-          
+
           if [ "${PR_EXISTS}" == 'false' ]; then
             TEST_PR_URL=$(gh pr create \
               --base "${TEST_BRANCH}" \
@@ -243,7 +179,7 @@ jobs:
 
   add_reaction:
     name: Add Reaction
-    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow, create_update_pr]
+    needs: [prepare_and_setup, call_core_workflow, create_update_pr]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -255,7 +191,7 @@ jobs:
 
   cleanup_comments:
     name: Clean up comments
-    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow, create_update_pr]
+    needs: [prepare_and_setup, call_core_workflow, create_update_pr]
     if: always() && needs.create_update_pr.outputs.test_pr_url != ''
     runs-on: ubuntu-latest
     steps:
@@ -299,7 +235,7 @@ jobs:
               const allComments = [oldPrComments, newPrComments];
               allComments.forEach(comments => {
                 comments.data.forEach(comment => {
-                  if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ needs.prepare_update.outputs.notice_comment_tag }}')) {
+                  if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ needs.prepare_and_setup.outputs.notice_comment_tag }}')) {
                     try {
                       await github.rest.issues.deleteComment({
                         comment_id: comment.id,
@@ -317,7 +253,7 @@ jobs:
 
   comment_on_prs:
     name: Comment on PRs
-    needs: [prepare_update, check_existing_pr, ensure_bot_label, call_core_workflow, create_update_pr]
+    needs: [prepare_and_setup, call_core_workflow, create_update_pr]
     if: always() && needs.create_update_pr.outputs.test_pr_url != ''
     runs-on: ubuntu-latest
     steps:
@@ -325,13 +261,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Comment on test PR (on failure)
-        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.prepare_update.outputs.disable_comments == 'false'
+        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.prepare_and_setup.outputs.disable_comments == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
+          TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ needs.prepare_update.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ needs.prepare_and_setup.outputs.notice_comment_tag }}
         run: |
           body="**Automatic ${TEST_BRANCH} update failed.**
 
@@ -351,13 +287,13 @@ jobs:
           ${body}"
 
       - name: Comment on original PR
-        if: needs.prepare_update.outputs.disable_comments == 'false'
+        if: needs.prepare_and_setup.outputs.disable_comments == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FEATURE_BRANCH: ${{ needs.prepare_update.outputs.feature_branch }}
-          TEST_BRANCH: ${{ needs.prepare_update.outputs.test_branch }}
+          FEATURE_BRANCH: ${{ needs.prepare_and_setup.outputs.feature_branch }}
+          TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
           TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ needs.prepare_update.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ needs.prepare_and_setup.outputs.notice_comment_tag }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
         run: |
           if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
