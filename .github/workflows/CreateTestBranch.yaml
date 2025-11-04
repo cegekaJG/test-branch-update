@@ -194,28 +194,34 @@ jobs:
             mapfile -t assignee_logins < <(echo "$pr" | jq -r '.assignees[].login' 2>/dev/null || true)
             
             mentions=""
-            if [ ${#assignee_logins[@]} -gt 0 ]; then
-              for assignee in "${assignee_logins[@]}"; do
-                [ -n "$assignee" ] && mentions="${mentions}@${assignee} "
-              done
-            fi
+            for assignee in "${assignee_logins[@]}"; do
+              if [ -n "$assignee" ]; then
+                mentions="${mentions}@${assignee} "
+              fi
+            done
             
             # Create comment body using cat with heredoc
-            assignee_line=""
             if [ -n "$mentions" ]; then
-              assignee_line="**Assignees:** ${mentions}"
-            fi
-            
-            comment_body=$(cat <<EOF
+              comment_body=$(cat <<EOF
           ## Test Branch Reset Notification
 
           The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
-          ${assignee_line:+
-          ${assignee_line}}
+
+          **Assignees:** ${mentions}
 
           If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
           EOF
           )
+            else
+              comment_body=$(cat <<EOF
+          ## Test Branch Reset Notification
+
+          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
+
+          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
+          EOF
+          )
+            fi
             
             # Post comment to PR
             gh pr comment "$pr_number" --body "$comment_body"
