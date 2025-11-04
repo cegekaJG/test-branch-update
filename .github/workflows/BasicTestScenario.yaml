@@ -1,0 +1,48 @@
+name: Test Scenario - UpdateTestBranchCore Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: 'Base branch to test against (default: main)'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  setup_test_scenario:
+    name: Setup Test Scenario
+    runs-on: ubuntu-latest
+    outputs:
+      base_branch: ${{ steps.setup.outputs.base_branch }}
+      test_branch: ${{ steps.setup.outputs.test_branch }}
+      feature_branch: ${{ steps.setup.outputs.feature_branch }}
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Test environment
+        id: setup
+        run: ./test/SetupTestScenario.sh ${{ github.event.inputs.base_branch }} ${{ github.run_number }}
+
+      - name: Check results
+        run: |
+          echo "Base Branch: ${{ steps.setup.outputs.base_branch }}"
+          echo "Test Branch: ${{ steps.setup.outputs.test_branch }}"
+          echo "Feature Branch: ${{ steps.setup.outputs.feature_branch }}"
+
+      - name: Run Update Test Branch Core
+        uses: ./.github/workflows/UpdateTestBranchCore.yaml
+        with:
+          base_branch: ${{ steps.setup.outputs.base_branch }}
+          test_branch: ${{ steps.setup.outputs.test_branch }}
+          feature_branch: ${{ steps.setup.outputs.feature_branch }}
