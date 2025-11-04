@@ -1,0 +1,229 @@
+name: Create Test Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: 'Base branch to create the test branch from (leave empty for default branch)'
+        required: false
+        type: string
+        default: ''
+      test_prefix:
+        description: 'Prefix for feature test branches (e.g., test/)'
+        required: true
+        type: string
+        default: 'test/'
+      test_branch_name:
+        description: 'Name of the test branch to create'
+        required: true
+        type: string
+      bot_label:
+        description: 'Name of the bot label for automated PRs'
+        required: true
+        type: string
+        default: 'Automated'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  setup_test_branch:
+    name: Setup Test Branch
+    runs-on: ubuntu-latest
+    outputs:
+      base_branch: ${{ steps.get_base.outputs.base_branch }}
+      test_branch_name: ${{ steps.sanitize.outputs.test_branch_name }}
+      test_branch_existed: ${{ steps.check_branch.outputs.test_branch_exists }}
+    steps:
+      - name: Set up Git
+        run: |
+          git config --global user.name github-actions[bot]
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get base branch
+        id: get_base
+        run: |
+          if [ -z "${{ github.event.inputs.base_branch }}" ]; then
+            base_branch=$(git remote show origin | grep "HEAD branch" | cut -d ":" -f 2 | xargs)
+            echo "Using default branch: $base_branch"
+          else
+            base_branch="${{ github.event.inputs.base_branch }}"
+            echo "Using provided base branch: $base_branch"
+          fi
+          echo "base_branch=$base_branch" >> $GITHUB_OUTPUT
+
+      - name: Sanitize inputs
+        id: sanitize
+        run: |
+          echo "test_branch_name=${{ github.event.inputs.test_branch_name }}" >> $GITHUB_OUTPUT
+          echo "test_prefix=${{ github.event.inputs.test_prefix }}" >> $GITHUB_OUTPUT
+          echo "bot_label=${{ github.event.inputs.bot_label }}" >> $GITHUB_OUTPUT
+
+      - name: Check if test branch exists
+        id: check_branch
+        run: |
+          if git ls-remote --heads origin | grep -q "refs/heads/${{ github.event.inputs.test_branch_name }}$"; then
+            echo "test_branch_exists=true" >> $GITHUB_OUTPUT
+            echo "Test branch exists"
+          else
+            echo "test_branch_exists=false" >> $GITHUB_OUTPUT
+            echo "Test branch does not exist"
+          fi
+
+      - name: Update repository variables
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Function to update or create a repository variable
+          update_variable() {
+            local var_name=$1
+            local var_value=$2
+            
+            gh api \
+              --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/actions/variables/${var_name} \
+              -f name="${var_name}" \
+              -f value="${var_value}" || \
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/actions/variables \
+              -f name="${var_name}" \
+              -f value="${var_value}"
+          }
+          
+          # Update all variables
+          update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch_name }}"
+          update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
+          update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
+          
+          echo "::notice::Repository variables updated successfully"
+
+      - name: Ensure bot label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOT_LABEL: ${{ steps.sanitize.outputs.bot_label }}
+        run: |
+          if [ -z "$(gh label list --search "${BOT_LABEL}" --limit 1)" ]; then
+            gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"
+            echo "::notice::Label ${BOT_LABEL} created"
+          else
+            echo "::notice::Label ${BOT_LABEL} already exists"
+          fi
+
+      - name: Archive and recreate test branch (if exists)
+        if: steps.check_branch.outputs.test_branch_exists == 'true'
+        env:
+          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch_name }}
+          BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}
+        run: |
+          # Create archive branch
+          date_suffix=$(date +%Y-%m-%d)
+          archive_name="archive/${TEST_BRANCH}/${date_suffix}"
+          
+          git fetch origin "${TEST_BRANCH}"
+          git checkout -b "${archive_name}" "origin/${TEST_BRANCH}"
+          git push origin "${archive_name}"
+          echo "::notice::Archived test branch to ${archive_name}"
+          
+          # Delete old test branch
+          git push origin --delete "${TEST_BRANCH}"
+          echo "::notice::Deleted old test branch ${TEST_BRANCH}"
+          
+          # Create new test branch
+          git fetch origin "${BASE_BRANCH}"
+          git checkout -b "${TEST_BRANCH}" "origin/${BASE_BRANCH}"
+          git push origin "${TEST_BRANCH}"
+          echo "::notice::Created new test branch ${TEST_BRANCH} from ${BASE_BRANCH}"
+
+      - name: Create new test branch (if doesn't exist)
+        if: steps.check_branch.outputs.test_branch_exists == 'false'
+        env:
+          BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}
+          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch_name }}
+        run: |
+          git fetch origin "${BASE_BRANCH}"
+          git checkout -b "${TEST_BRANCH}" "origin/${BASE_BRANCH}"
+          git push origin "${TEST_BRANCH}"
+          echo "::notice::Created new test branch ${TEST_BRANCH} from ${BASE_BRANCH}"
+
+  notify_prs:
+    name: Notify Open PRs
+    needs: setup_test_branch
+    runs-on: ubuntu-latest
+    if: needs.setup_test_branch.outputs.test_branch_existed == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup jq
+        uses: dcarbone/install-jq-action@v3
+
+      - name: Comment on open PRs targeting base branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_BRANCH: ${{ needs.setup_test_branch.outputs.base_branch }}
+          TEST_BRANCH: ${{ needs.setup_test_branch.outputs.test_branch_name }}
+        run: |
+          # Get all open PRs targeting the base branch
+          prs=$(gh pr list --base "${BASE_BRANCH}" --state open --json number,assignees)
+          
+          if [ -z "$prs" ] || [ "$prs" == "[]" ]; then
+            echo "::notice::No open PRs found targeting ${BASE_BRANCH}"
+            exit 0
+          fi
+          
+          pr_count=$(echo "$prs" | jq '. | length')
+          echo "Found $pr_count open PRs targeting ${BASE_BRANCH}"
+          
+          # Process each PR using process substitution to avoid subshell
+          while read -r pr; do
+            pr_number=$(echo "$pr" | jq -r '.number')
+            
+            # Build assignee mentions - get assignees as array
+            mapfile -t assignee_logins < <(echo "$pr" | jq -r '.assignees[].login' 2>/dev/null || true)
+            
+            mentions=""
+            for assignee in "${assignee_logins[@]}"; do
+              if [ -n "$assignee" ]; then
+                mentions="${mentions}@${assignee} "
+              fi
+            done
+            
+            # Create comment body using cat with heredoc
+            if [ -n "$mentions" ]; then
+              comment_body=$(cat <<EOF
+          ## Test Branch Reset Notification
+
+          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
+
+          **Assignees:** ${mentions}
+
+          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
+          EOF
+          )
+            else
+              comment_body=$(cat <<EOF
+          ## Test Branch Reset Notification
+
+          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
+
+          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
+          EOF
+          )
+            fi
+            
+            # Post comment to PR
+            gh pr comment "$pr_number" --body "$comment_body"
+            echo "::notice::Posted notification comment to PR #${pr_number}"
+          done < <(echo "$prs" | jq -c '.[]')
