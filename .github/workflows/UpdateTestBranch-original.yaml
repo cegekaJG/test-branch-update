@@ -189,17 +189,21 @@ jobs:
           for msg in $feature_test_bodies; do
             echo "::debug::Full message:"
             echo "::debug::$msg"
-            commit=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))' | tail -n 1)
-            if [[ -z "$commit" ]]; then
+            # Find all cherry-pick notices in the message (handles squash commits with multiple cherry-picks)
+            commits=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))')
+            if [[ -z "$commits" ]]; then
               continue
             fi
-            if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
-              commit=${commit:0:8}
-              picked_commits+=("$commit")
-              echo "::debug::Commit $commit found."
-            else
-              echo "::debug::Commit $commit not found in the repository."
-            fi
+            # Process each cherry-picked commit found
+            while IFS= read -r commit; do
+              if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
+                commit=${commit:0:8}
+                picked_commits+=("$commit")
+                echo "::debug::Commit $commit found."
+              else
+                echo "::debug::Commit $commit not found in the repository."
+              fi
+            done <<< "$commits"
           done
           unset IFS
 
