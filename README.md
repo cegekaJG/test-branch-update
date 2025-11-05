@@ -8,26 +8,31 @@ This repository contains workflows that can be used to automate cherry-picking f
 Workflow for creating or resetting the test branch. This workflow:
 - Creates a new test branch from the base branch if it doesn't exist
 - Archives and recreates the test branch if it already exists
-- Updates repository variables for UpdateTestBranch workflow configuration
 - Ensures the bot label exists for automated PRs
 - Notifies open PRs when the test branch is reset
 
-#### Usage
-Trigger manually via `workflow_dispatch` with optional inputs:
-- **base_branch**: Base branch to create the test branch from (defaults to repository's default branch)
-- **test_prefix**: Prefix for feature test branches (default: `test/`)
-- **test_branch**: Name of the test branch (defaults to `[test_prefix]/[base_branch]`)
-- **bot_label**: Name of the bot label for automated PRs (default: `Automated`)
+The workflow reads configuration from repository variables (`UPDATETESTBRANCH_TEST_BRANCH`, `UPDATETESTBRANCH_FEATURE_TEST_PREFIX`, `UPDATETESTBRANCH_BOT_LABEL`) with fallbacks to default environment variables.
 
-**Note**: This workflow requires a `GHTOKENWORKFLOW` secret (Personal Access Token with `repo` scope) to update repository variables. If the secret is not configured, the workflow will display instructions on how to set it up. For more information, see [GhTokenWorkflow documentation](https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md).
+#### Usage
+Trigger manually via `workflow_dispatch` with optional input:
+- **base_branch**: Base branch to create the test branch from (defaults to repository's default branch)
+
+**Configuration**: Set repository variables in Settings → Secrets and variables → Actions → Variables:
+- `UPDATETESTBRANCH_TEST_BRANCH`: Name of the test branch (defaults to `test/[base_branch]`)
+- `UPDATETESTBRANCH_FEATURE_TEST_PREFIX`: Prefix for feature test branches (default: `test/`)
+- `UPDATETESTBRANCH_BOT_LABEL`: Label for automated PRs (default: `Automated`)
 
 ### UpdateTestBranch.yaml
 The main wrapper workflow that handles PR comments (`!update-test`) and coordinates the cherry-picking process. This workflow:
 - Extracts PR information and configuration from comments
 - Calls the core UpdateTestBranchCore workflow with appropriate parameters
-- Handles post-processing like PR comments and cleanup
+- Creates or updates pull requests for test branch changes
+- Handles post-processing like reactions and comment cleanup
+
+**Requirements**: This workflow requires a `GHTOKENWORKFLOW` secret (Personal Access Token with `repo` scope) to automatically trigger pull request workflows. The workflow will fail if this secret is not configured. For setup instructions, see [GhTokenWorkflow documentation](https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md).
 
 #### Usage
+Comment `!update-test` on any pull request to trigger the workflow.
 
 ### UpdateTestBranchCore.yaml
 The core cherry-picking workflow that is independent of PR context. This workflow:
