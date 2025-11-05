@@ -13,9 +13,9 @@ on:
         required: true
         type: string
         default: 'test/'
-      test_branch_name:
-        description: 'Name of the test branch to create'
-        required: true
+      test_branch:
+        description: 'Name of the test branch to create (leave empty for "[test_prefix]/[base_branch]"'
+        required: false
         type: string
       bot_label:
         description: 'Name of the bot label for automated PRs'
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       base_branch: ${{ steps.get_base.outputs.base_branch }}
-      test_branch_name: ${{ steps.sanitize.outputs.test_branch_name }}
+      test_branch: ${{ steps.sanitize.outputs.test_branch }}
       test_branch_existed: ${{ steps.check_branch.outputs.test_branch_exists }}
     steps:
       - name: Set up Git
@@ -67,7 +67,7 @@ jobs:
       - name: Sanitize inputs
         id: sanitize
         run: |
-          echo "test_branch_name=${{ github.event.inputs.test_branch_name }}" >> $GITHUB_OUTPUT
+          echo "test_branch=${{ github.event.inputs.test_branch }}" >> $GITHUB_OUTPUT
           echo "test_prefix=${{ github.event.inputs.test_prefix }}" >> $GITHUB_OUTPUT
           echo "bot_label=${{ github.event.inputs.bot_label }}" >> $GITHUB_OUTPUT
           echo "token=${{ github.event.inputs.token }}" >> $GITHUB_OUTPUT
@@ -75,7 +75,13 @@ jobs:
       - name: Check if test branch exists
         id: check_branch
         run: |
-          if git ls-remote --heads origin | grep -q "refs/heads/${{ github.event.inputs.test_branch_name }}$"; then
+          test_branch=${{ steps.sanitize.outputs.test_branch }}
+          if [ -z $test_branch ] then
+            test_branch="${{ steps.sanitize.outputs.test_prefix }}${{ steps.get_base.outputs.base_branch }}"
+            echo "No test branch given, using $test_branch"
+          fi
+
+          if git ls-remote --heads origin | grep -q "refs/heads/${{ steps.sanitize.outputs.test_branch }}$"; then
             echo "test_branch_exists=true" >> $GITHUB_OUTPUT
             echo "Test branch exists"
           else
@@ -109,7 +115,7 @@ jobs:
           }
 
           # Update all variables
-          update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch_name }}"
+          update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch }}"
           update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
           update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
           update_variable "UPDATETESTBRANCH_TOKEN_NAME" "${{ steps.sanitize.outputs.token }}"
@@ -131,7 +137,7 @@ jobs:
       - name: Archive and recreate test branch (if exists)
         if: steps.check_branch.outputs.test_branch_exists == 'true'
         env:
-          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch_name }}
+          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch }}
           BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}
         run: |
           # Create archive branch
@@ -157,7 +163,7 @@ jobs:
         if: steps.check_branch.outputs.test_branch_exists == 'false'
         env:
           BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}
-          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch_name }}
+          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch }}
         run: |
           git fetch origin "${BASE_BRANCH}"
           git checkout -b "${TEST_BRANCH}" "origin/${BASE_BRANCH}"
@@ -180,7 +186,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BASE_BRANCH: ${{ needs.setup_test_branch.outputs.base_branch }}
-          TEST_BRANCH: ${{ needs.setup_test_branch.outputs.test_branch_name }}
+          TEST_BRANCH: ${{ needs.setup_test_branch.outputs.test_branch }}
         run: |
           # Get all open PRs targeting the base branch
           prs=$(gh pr list --base "${BASE_BRANCH}" --state open --json number,assignees)
