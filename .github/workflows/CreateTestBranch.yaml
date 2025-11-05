@@ -8,25 +8,15 @@ on:
         required: false
         type: string
         default: ''
-      test_prefix:
-        description: 'Prefix for feature test branches (e.g., test/)'
-        required: true
-        type: string
-        default: 'test/'
-      test_branch:
-        description: 'Name of the test branch to create (leave empty for "[test_prefix]/[base_branch]"'
-        required: false
-        type: string
-      bot_label:
-        description: 'Name of the bot label for automated PRs'
-        required: true
-        type: string
-        default: 'Automated'
 
 permissions:
   contents: write
   pull-requests: write
   issues: write
+
+env:
+  FEATURE_TEST_PREFIX: 'test/'
+  BOT_LABEL: 'Automated'
 
 jobs:
   setup_test_branch:
@@ -47,134 +37,56 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Sanitize inputs
+        id: sanitize
+        run: |
+          echo "TEST_BRANCH=${{ vars.UPDATETESTBRANCH_TEST_BRANCH }}" >> $GITHUB_OUTPUT
+          echo "FEATURE_TEST_PREFIX=${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}" >> $GITHUB_OUTPUT
+          echo "base_branch=${{ github.event.inputs.base_branch }}" >> $GITHUB_OUTPUT
+          echo "bot_label=${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}" >> $GITHUB_OUTPUT
+
       - name: Get base branch
         id: get_base
+        env:
+          BASE_BRANCH_INPUT: ${{ steps.sanitize.outputs.base_branch }}
         run: |
-          if [ -z "${{ github.event.inputs.base_branch }}" ]; then
+          if [ -z "$BASE_BRANCH_INPUT" ]; then
             base_branch=$(git remote show origin | grep "HEAD branch" | cut -d ":" -f 2 | xargs)
             echo "Using default branch: $base_branch"
           else
-            base_branch="${{ github.event.inputs.base_branch }}"
+            base_branch="$BASE_BRANCH_INPUT"
             echo "Using provided base branch: $base_branch"
           fi
           echo "base_branch=$base_branch" >> $GITHUB_OUTPUT
 
-      - name: Sanitize inputs
-        id: sanitize
+      - name: Determine test branch name
+        id: get_test_branch
+        env:
+          TEST_BRANCH_INPUT: ${{ steps.sanitize.outputs.TEST_BRANCH }}
+          FEATURE_TEST_PREFIX: ${{ steps.sanitize.outputs.FEATURE_TEST_PREFIX }}
+          BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}
         run: |
-          echo "test_branch=${{ github.event.inputs.test_branch }}" >> $GITHUB_OUTPUT
-          echo "test_prefix=${{ github.event.inputs.test_prefix }}" >> $GITHUB_OUTPUT
-          echo "bot_label=${{ github.event.inputs.bot_label }}" >> $GITHUB_OUTPUT
+          if [ -z "$TEST_BRANCH_INPUT" ]; then
+            test_branch="${FEATURE_TEST_PREFIX}${BASE_BRANCH}"
+            echo "No test branch given, using $test_branch"
+          else
+            test_branch="$TEST_BRANCH_INPUT"
+            echo "Using provided test branch: $test_branch"
+          fi
+          echo "test_branch=$test_branch" >> $GITHUB_OUTPUT
 
       - name: Check if test branch exists
         id: check_branch
         run: |
-          test_branch="${{ steps.sanitize.outputs.test_branch }}"
-          if [ -z "$test_branch" ]; then
-            test_branch="${{ steps.sanitize.outputs.test_prefix }}${{ steps.get_base.outputs.base_branch }}"
-            echo "No test branch given, using $test_branch"
-          fi
+          test_branch="${{ steps.get_test_branch.outputs.test_branch }}"
 
           if git ls-remote --heads origin | grep -q "refs/heads/${test_branch}$"; then
             echo "test_branch_exists=true" >> $GITHUB_OUTPUT
-            echo "Test branch exists"
+            echo "Test branch found, archiving and recreating."
           else
             echo "test_branch_exists=false" >> $GITHUB_OUTPUT
-            echo "Test branch does not exist"
+            echo "Test branch not found."
           fi
-
-      - name: Check GHTOKENWORKFLOW secret
-        id: check_token
-        env:
-          GH_TOKEN: ${{ secrets.GHTOKENWORKFLOW }}
-        run: |
-          # Check if GHTOKENWORKFLOW secret is available
-          if [ -z "$GH_TOKEN" ]; then
-            cat << 'EOF'
-          ## ⚠️ GHTOKENWORKFLOW Secret Not Found
-          
-          The GHTOKENWORKFLOW secret is required to update repository variables.
-          
-          ### How to create and add the GHTOKENWORKFLOW secret:
-          
-          1. **Create a Personal Access Token (PAT)**:
-             - Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
-             - Click "Generate new token" → "Generate new token (classic)"
-             - Give it a descriptive name (e.g., "Workflow Token")
-             - Select the `repo` scope (Full control of private repositories)
-             - Click "Generate token" and copy the token value
-          
-          2. **Add the token as a repository secret**:
-             - Go to this repository's Settings → Secrets and variables → Actions
-             - Click "New repository secret"
-             - Name: `GHTOKENWORKFLOW`
-             - Secret: Paste the token value you copied
-             - Click "Add secret"
-          
-          3. **Re-run this workflow** to update the repository variables
-          
-          For more detailed information, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
-          
-          **Note**: Repository variables will not be updated, but the workflow will continue with other tasks.
-          EOF
-            echo "::warning::GHTOKENWORKFLOW secret not found. Repository variables will not be updated."
-            echo "token_available=false" >> $GITHUB_OUTPUT
-          else
-            echo "::notice::GHTOKENWORKFLOW secret found. Repository variables will be updated."
-            echo "token_available=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Update repository variables
-        if: steps.check_token.outputs.token_available == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GHTOKENWORKFLOW }}
-        run: |
-          # Function to update or create a repository variable
-          update_variable() {
-            local var_name=$1
-            local var_value=$2
-
-            echo "Updating variable: ${var_name}"
-            
-            # Try to update existing variable first
-            local response
-            response=$(gh api \
-              --method PATCH \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              /repos/${{ github.repository }}/actions/variables/${var_name} \
-              -f name="${var_name}" \
-              -f value="${var_value}" 2>&1)
-            local exit_code=$?
-            
-            # If variable doesn't exist (404 error), create it
-            if [ $exit_code -ne 0 ] && echo "$response" | grep -q "Not Found"; then
-              gh api \
-                --method POST \
-                -H "Accept: application/vnd.github+json" \
-                -H "X-GitHub-Api-Version: 2022-11-28" \
-                /repos/${{ github.repository }}/actions/variables \
-                -f name="${var_name}" \
-                -f value="${var_value}"
-              exit_code=$?
-            fi
-            
-            if [ $exit_code -eq 0 ]; then
-              echo "::notice::Successfully updated ${var_name}"
-              return 0
-            else
-              echo "::error::Failed to update ${var_name}"
-              return 1
-            fi
-          }
-
-          # Update all variables
-          update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch }}"
-          update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
-          update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
-          update_variable "UPDATETESTBRANCH_TOKEN_NAME" "GHTOKENWORKFLOW"
-
-          echo "::notice::Repository variables updated successfully"
 
       - name: Ensure bot label exists
         env:
@@ -188,7 +100,7 @@ jobs:
             echo "::notice::Label ${BOT_LABEL} already exists"
           fi
 
-      - name: Archive and recreate test branch (if exists)
+      - name: Archive and recreate test branch
         if: steps.check_branch.outputs.test_branch_exists == 'true'
         env:
           TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch }}
@@ -268,26 +180,17 @@ jobs:
             done
 
             # Create comment body using cat with heredoc
+
+            comment_body=$(cat <<EOF
+          ## Test Branch Reset Notification
+
+          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
+
+          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
+          EOF
+          )
             if [ -n "$mentions" ]; then
-              comment_body=$(cat <<EOF
-          ## Test Branch Reset Notification
-
-          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
-
-          **Assignees:** ${mentions}
-
-          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
-          EOF
-          )
-            else
-              comment_body=$(cat <<EOF
-          ## Test Branch Reset Notification
-
-          The test branch \`${TEST_BRANCH}\` has been reset. Any changes that were added to this branch but not yet merged to \`${BASE_BRANCH}\` have been removed.
-
-          If you want to re-add your changes to the test branch, please comment \`!update-test\` in this PR.
-          EOF
-          )
+              comment_body="${mentions}\n\n${comment_body}"
             fi
 
             # Post comment to PR
