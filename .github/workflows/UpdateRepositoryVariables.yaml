@@ -52,23 +52,30 @@ jobs:
 
             echo "Updating variable: ${var_name}"
             
-            gh api \
+            # Try to update existing variable first
+            if gh api \
               --method PATCH \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               /repos/${{ github.repository }}/actions/variables/${var_name} \
               -f name="${var_name}" \
-              -f value="${var_value}" 2>/dev/null || \
-            gh api \
-              --method POST \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              /repos/${{ github.repository }}/actions/variables \
-              -f name="${var_name}" \
-              -f value="${var_value}"
+              -f value="${var_value}" 2>&1 | grep -q "Not Found"; then
+              # Variable doesn't exist, create it
+              gh api \
+                --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                /repos/${{ github.repository }}/actions/variables \
+                -f name="${var_name}" \
+                -f value="${var_value}"
+              local exit_code=$?
+            else
+              local exit_code=$?
+            fi
             
-            if [ $? -eq 0 ]; then
+            if [ $exit_code -eq 0 ]; then
               echo "::notice::Successfully updated ${var_name}"
+              return 0
             else
               echo "::error::Failed to update ${var_name}"
               return 1

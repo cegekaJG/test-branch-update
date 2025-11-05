@@ -29,7 +29,7 @@ Workflow for configuring repository variables used by UpdateTestBranch workflow.
 1. Create a Personal Access Token with `repo` scope
 2. Add it as a repository secret named `GHTOKENWORKFLOW`
 3. Trigger manually via `workflow_dispatch` with inputs:
-   - **test_branch**: Name of the test branch (leave empty for default)
+   - **test_branch**: Name of the test branch (if not provided, uses `[test_prefix]/[base_branch]`)
    - **test_prefix**: Prefix for feature test branches (default: `test/`)
    - **bot_label**: Name of the bot label for automated PRs (default: `Automated`)
    - **token_name**: Token name to use for GitHub API calls (default: `GHTOKENWORKFLOW`)
