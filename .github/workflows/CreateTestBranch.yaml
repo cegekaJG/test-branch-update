@@ -75,13 +75,13 @@ jobs:
       - name: Check if test branch exists
         id: check_branch
         run: |
-          test_branch=${{ steps.sanitize.outputs.test_branch }}
-          if [ -z $test_branch ] then
+          test_branch="${{ steps.sanitize.outputs.test_branch }}"
+          if [ -z "$test_branch" ]; then
             test_branch="${{ steps.sanitize.outputs.test_prefix }}${{ steps.get_base.outputs.base_branch }}"
             echo "No test branch given, using $test_branch"
           fi
 
-          if git ls-remote --heads origin | grep -q "refs/heads/${{ steps.sanitize.outputs.test_branch }}$"; then
+          if git ls-remote --heads origin | grep -q "refs/heads/${test_branch}$"; then
             echo "test_branch_exists=true" >> $GITHUB_OUTPUT
             echo "Test branch exists"
           else
