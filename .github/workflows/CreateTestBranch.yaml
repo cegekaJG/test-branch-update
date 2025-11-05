@@ -22,11 +22,6 @@ on:
         required: true
         type: string
         default: 'Automated'
-      token:
-        description: 'Token name to use for GitHub API calls (GITHUB_TOKEN or custom secret name)'
-        required: true
-        type: string
-        default: 'GHTOKENWORKFLOW'
 
 permissions:
   contents: write
@@ -70,7 +65,6 @@ jobs:
           echo "test_branch=${{ github.event.inputs.test_branch }}" >> $GITHUB_OUTPUT
           echo "test_prefix=${{ github.event.inputs.test_prefix }}" >> $GITHUB_OUTPUT
           echo "bot_label=${{ github.event.inputs.bot_label }}" >> $GITHUB_OUTPUT
-          echo "token=${{ github.event.inputs.token }}" >> $GITHUB_OUTPUT
 
       - name: Check if test branch exists
         id: check_branch
@@ -87,6 +81,87 @@ jobs:
           else
             echo "test_branch_exists=false" >> $GITHUB_OUTPUT
             echo "Test branch does not exist"
+          fi
+
+      - name: Update repository variables
+        env:
+          GH_TOKEN: ${{ secrets.GHTOKENWORKFLOW }}
+        run: |
+          # Check if GHTOKENWORKFLOW secret is available
+          if [ -z "$GH_TOKEN" ]; then
+            cat << 'EOF'
+          ## ⚠️ GHTOKENWORKFLOW Secret Not Found
+          
+          The GHTOKENWORKFLOW secret is required to update repository variables.
+          
+          ### How to create and add the GHTOKENWORKFLOW secret:
+          
+          1. **Create a Personal Access Token (PAT)**:
+             - Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+             - Click "Generate new token" → "Generate new token (classic)"
+             - Give it a descriptive name (e.g., "Workflow Token")
+             - Select the `repo` scope (Full control of private repositories)
+             - Click "Generate token" and copy the token value
+          
+          2. **Add the token as a repository secret**:
+             - Go to this repository's Settings → Secrets and variables → Actions
+             - Click "New repository secret"
+             - Name: `GHTOKENWORKFLOW`
+             - Secret: Paste the token value you copied
+             - Click "Add secret"
+          
+          3. **Re-run this workflow** to update the repository variables
+          
+          For more detailed information, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
+          
+          **Note**: Repository variables will not be updated, but the workflow will continue with other tasks.
+          EOF
+            echo "::warning::GHTOKENWORKFLOW secret not found. Repository variables will not be updated."
+          else
+            # Function to update or create a repository variable
+            update_variable() {
+              local var_name=$1
+              local var_value=$2
+
+              echo "Updating variable: ${var_name}"
+              
+              # Try to update existing variable first
+              if gh api \
+                --method PATCH \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                /repos/${{ github.repository }}/actions/variables/${var_name} \
+                -f name="${var_name}" \
+                -f value="${var_value}" 2>&1 | grep -q "Not Found"; then
+                # Variable doesn't exist, create it
+                gh api \
+                  --method POST \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  /repos/${{ github.repository }}/actions/variables \
+                  -f name="${var_name}" \
+                  -f value="${var_value}"
+                local exit_code=$?
+              else
+                local exit_code=$?
+              fi
+              
+              if [ $exit_code -eq 0 ]; then
+                echo "::notice::Successfully updated ${var_name}"
+                return 0
+              else
+                echo "::error::Failed to update ${var_name}"
+                return 1
+              fi
+            }
+
+            # Update all variables
+            update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch }}"
+            update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
+            update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
+            update_variable "UPDATETESTBRANCH_TOKEN_NAME" "GHTOKENWORKFLOW"
+
+            echo "::notice::Repository variables updated successfully"
           fi
 
       - name: Ensure bot label exists
