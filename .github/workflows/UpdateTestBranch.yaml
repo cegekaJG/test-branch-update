@@ -50,10 +50,21 @@ jobs:
       - name: Setup GH_TOKEN
         id: setup_token
         run: |
-          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME || 'GHTOKENWORKFLOW' }}"
+          # Get token name from variable
+          # Note: In GitHub Actions, we cannot distinguish between "variable not set"
+          # and "variable set to empty string" - both evaluate to empty.
+          # To use GITHUB_TOKEN, explicitly set UPDATETESTBRANCH_TOKEN_NAME to "GITHUB_TOKEN"
+          # To use a custom token, set UPDATETESTBRANCH_TOKEN_NAME to the secret name (e.g., "GHTOKENWORKFLOW")
+          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME }}"
+
+          # If variable is not set, default to GHTOKENWORKFLOW for backwards compatibility
+          if [ -z "${token_name}" ]; then
+            token_name="GHTOKENWORKFLOW"
+          fi
+
           echo "Token name: ${token_name}"
 
-          if [ -z "${token_name}" ] || [ "${token_name}" = "GITHUB_TOKEN" ]; then
+          if [ "${token_name}" = "GITHUB_TOKEN" ]; then
             echo "Using GITHUB_TOKEN"
             echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
           else
@@ -150,9 +161,13 @@ jobs:
 
       - name: Setup GH_TOKEN
         run: |
-          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME || 'GHTOKENWORKFLOW' }}"
+          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME }}"
 
-          if [ -z "${token_name}" ] || [ "${token_name}" = "GITHUB_TOKEN" ]; then
+          if [ -z "${token_name}" ]; then
+            token_name="GHTOKENWORKFLOW"
+          fi
+
+          if [ "${token_name}" = "GITHUB_TOKEN" ]; then
             echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
           else
             custom_token="${{ secrets.GHTOKENWORKFLOW }}"
@@ -292,9 +307,13 @@ jobs:
 
       - name: Setup GH_TOKEN
         run: |
-          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME || 'GHTOKENWORKFLOW' }}"
+          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME }}"
 
-          if [ -z "${token_name}" ] || [ "${token_name}" = "GITHUB_TOKEN" ]; then
+          if [ -z "${token_name}" ]; then
+            token_name="GHTOKENWORKFLOW"
+          fi
+
+          if [ "${token_name}" = "GITHUB_TOKEN" ]; then
             echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
           else
             custom_token="${{ secrets.GHTOKENWORKFLOW }}"
