@@ -22,6 +22,11 @@ on:
         required: true
         type: string
         default: 'Automated'
+      token:
+        description: 'Token name to use for GitHub API calls (GITHUB_TOKEN or custom secret name)'
+        required: true
+        type: string
+        default: 'GHTOKENWORKFLOW'
 
 permissions:
   contents: write
@@ -65,6 +70,7 @@ jobs:
           echo "test_branch_name=${{ github.event.inputs.test_branch_name }}" >> $GITHUB_OUTPUT
           echo "test_prefix=${{ github.event.inputs.test_prefix }}" >> $GITHUB_OUTPUT
           echo "bot_label=${{ github.event.inputs.bot_label }}" >> $GITHUB_OUTPUT
+          echo "token=${{ github.event.inputs.token }}" >> $GITHUB_OUTPUT
 
       - name: Check if test branch exists
         id: check_branch
@@ -85,7 +91,7 @@ jobs:
           update_variable() {
             local var_name=$1
             local var_value=$2
-            
+
             gh api \
               --method PATCH \
               -H "Accept: application/vnd.github+json" \
@@ -101,12 +107,13 @@ jobs:
               -f name="${var_name}" \
               -f value="${var_value}"
           }
-          
+
           # Update all variables
           update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch_name }}"
           update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
           update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
-          
+          update_variable "UPDATETESTBRANCH_TOKEN_NAME" "${{ steps.sanitize.outputs.token }}"
+
           echo "::notice::Repository variables updated successfully"
 
       - name: Ensure bot label exists
@@ -130,16 +137,16 @@ jobs:
           # Create archive branch
           date_suffix=$(date +%Y-%m-%d)
           archive_name="archive/${TEST_BRANCH}/${date_suffix}"
-          
+
           git fetch origin "${TEST_BRANCH}"
           git checkout -b "${archive_name}" "origin/${TEST_BRANCH}"
           git push origin "${archive_name}"
           echo "::notice::Archived test branch to ${archive_name}"
-          
+
           # Delete old test branch
           git push origin --delete "${TEST_BRANCH}"
           echo "::notice::Deleted old test branch ${TEST_BRANCH}"
-          
+
           # Create new test branch
           git fetch origin "${BASE_BRANCH}"
           git checkout -b "${TEST_BRANCH}" "origin/${BASE_BRANCH}"
@@ -177,29 +184,29 @@ jobs:
         run: |
           # Get all open PRs targeting the base branch
           prs=$(gh pr list --base "${BASE_BRANCH}" --state open --json number,assignees)
-          
+
           if [ -z "$prs" ] || [ "$prs" == "[]" ]; then
             echo "::notice::No open PRs found targeting ${BASE_BRANCH}"
             exit 0
           fi
-          
+
           pr_count=$(echo "$prs" | jq '. | length')
           echo "Found $pr_count open PRs targeting ${BASE_BRANCH}"
-          
+
           # Process each PR using process substitution to avoid subshell
           while read -r pr; do
             pr_number=$(echo "$pr" | jq -r '.number')
-            
+
             # Build assignee mentions - get assignees as array
             mapfile -t assignee_logins < <(echo "$pr" | jq -r '.assignees[].login' 2>/dev/null || true)
-            
+
             mentions=""
             for assignee in "${assignee_logins[@]}"; do
               if [ -n "$assignee" ]; then
                 mentions="${mentions}@${assignee} "
               fi
             done
-            
+
             # Create comment body using cat with heredoc
             if [ -n "$mentions" ]; then
               comment_body=$(cat <<EOF
@@ -222,7 +229,7 @@ jobs:
           EOF
           )
             fi
-            
+
             # Post comment to PR
             gh pr comment "$pr_number" --body "$comment_body"
             echo "::notice::Posted notification comment to PR #${pr_number}"
