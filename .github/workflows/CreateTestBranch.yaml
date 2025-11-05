@@ -83,7 +83,8 @@ jobs:
             echo "Test branch does not exist"
           fi
 
-      - name: Update repository variables
+      - name: Check GHTOKENWORKFLOW secret
+        id: check_token
         env:
           GH_TOKEN: ${{ secrets.GHTOKENWORKFLOW }}
         run: |
@@ -117,54 +118,63 @@ jobs:
           **Note**: Repository variables will not be updated, but the workflow will continue with other tasks.
           EOF
             echo "::warning::GHTOKENWORKFLOW secret not found. Repository variables will not be updated."
+            echo "token_available=false" >> $GITHUB_OUTPUT
           else
-            # Function to update or create a repository variable
-            update_variable() {
-              local var_name=$1
-              local var_value=$2
+            echo "::notice::GHTOKENWORKFLOW secret found. Repository variables will be updated."
+            echo "token_available=true" >> $GITHUB_OUTPUT
+          fi
 
-              echo "Updating variable: ${var_name}"
-              
-              # Try to update existing variable first
-              local response
-              response=$(gh api \
-                --method PATCH \
+      - name: Update repository variables
+        if: steps.check_token.outputs.token_available == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GHTOKENWORKFLOW }}
+        run: |
+          # Function to update or create a repository variable
+          update_variable() {
+            local var_name=$1
+            local var_value=$2
+
+            echo "Updating variable: ${var_name}"
+            
+            # Try to update existing variable first
+            local response
+            response=$(gh api \
+              --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              /repos/${{ github.repository }}/actions/variables/${var_name} \
+              -f name="${var_name}" \
+              -f value="${var_value}" 2>&1)
+            local exit_code=$?
+            
+            # If variable doesn't exist (404 error), create it
+            if [ $exit_code -ne 0 ] && echo "$response" | grep -q "Not Found"; then
+              gh api \
+                --method POST \
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
-                /repos/${{ github.repository }}/actions/variables/${var_name} \
+                /repos/${{ github.repository }}/actions/variables \
                 -f name="${var_name}" \
-                -f value="${var_value}" 2>&1)
-              local exit_code=$?
-              
-              # If variable doesn't exist (404 error), create it
-              if [ $exit_code -ne 0 ] && echo "$response" | grep -q "Not Found"; then
-                gh api \
-                  --method POST \
-                  -H "Accept: application/vnd.github+json" \
-                  -H "X-GitHub-Api-Version: 2022-11-28" \
-                  /repos/${{ github.repository }}/actions/variables \
-                  -f name="${var_name}" \
-                  -f value="${var_value}"
-                exit_code=$?
-              fi
-              
-              if [ $exit_code -eq 0 ]; then
-                echo "::notice::Successfully updated ${var_name}"
-                return 0
-              else
-                echo "::error::Failed to update ${var_name}"
-                return 1
-              fi
-            }
+                -f value="${var_value}"
+              exit_code=$?
+            fi
+            
+            if [ $exit_code -eq 0 ]; then
+              echo "::notice::Successfully updated ${var_name}"
+              return 0
+            else
+              echo "::error::Failed to update ${var_name}"
+              return 1
+            fi
+          }
 
-            # Update all variables
-            update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch }}"
-            update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
-            update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
-            update_variable "UPDATETESTBRANCH_TOKEN_NAME" "GHTOKENWORKFLOW"
+          # Update all variables
+          update_variable "UPDATETESTBRANCH_TEST_BRANCH" "${{ steps.sanitize.outputs.test_branch }}"
+          update_variable "UPDATETESTBRANCH_FEATURE_TEST_PREFIX" "${{ steps.sanitize.outputs.test_prefix }}"
+          update_variable "UPDATETESTBRANCH_BOT_LABEL" "${{ steps.sanitize.outputs.bot_label }}"
+          update_variable "UPDATETESTBRANCH_TOKEN_NAME" "GHTOKENWORKFLOW"
 
-            echo "::notice::Repository variables updated successfully"
-          fi
+          echo "::notice::Repository variables updated successfully"
 
       - name: Ensure bot label exists
         env:
