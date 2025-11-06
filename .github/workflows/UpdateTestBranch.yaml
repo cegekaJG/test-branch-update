@@ -152,11 +152,12 @@ jobs:
     needs: [prepare_and_setup, call_core_workflow]
     runs-on: ubuntu-latest
     if: needs.call_core_workflow.outputs.skip_all == 'false' && needs.call_core_workflow.outputs.no_changes == 'false'
-    outputs:
-      test_pr_url: ${{ steps.create_pr.outputs.TEST_PR_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
 
       - name: Create/Update pull request
         id: create_pr
@@ -198,15 +199,6 @@ jobs:
             gh pr ready --undo "${FEATURE_TEST_BRANCH}"
           fi
 
-  cleanup_comments:
-    name: Clean up comments
-    needs: [prepare_and_setup, call_core_workflow, create_update_pr]
-    if: always() && needs.create_update_pr.outputs.test_pr_url != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Clean up old comments
         uses: actions/github-script@v7
         continue-on-error: true
@@ -216,8 +208,8 @@ jobs:
           script: |
             (async () => {
               let newPrComments = [];
-              if ("${{ needs.create_update_pr.outputs.test_pr_url }}") {
-                const urlSubstrings = "${{ needs.create_update_pr.outputs.test_pr_url }}".split('/');
+              if ("${{ steps.create_pr.outputs.TEST_PR_URL }}") {
+                const urlSubstrings = "${{ steps.create_pr.outputs.TEST_PR_URL }}".split('/');
                 const newPrNumber = urlSubstrings[urlSubstrings.length - 1];
                 try {
                   newPrComments = await github.rest.issues.listComments({
@@ -260,45 +252,12 @@ jobs:
               });
             })();
 
-  comment_on_prs:
-    name: Comment on PRs
-    needs: [prepare_and_setup, call_core_workflow, create_update_pr]
-    if: always() && needs.create_update_pr.outputs.test_pr_url != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 'Setup jq'
-        uses: dcarbone/install-jq-action@v3
-
-      - name: Setup GH_TOKEN
-        run: |
-          token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME }}"
-
-          if [ -z "${token_name}" ]; then
-            token_name="UPDATETESTTOKEN"
-          fi
-
-          if [ "${token_name}" = "GITHUB_TOKEN" ]; then
-            echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
-          else
-            custom_token="${{ secrets.UPDATETESTTOKEN }}"
-            if [ -z "${custom_token}" ]; then
-              echo "::error::The secret '${token_name}' is required but has no value."
-              exit 1
-            fi
-            # Use the get-gh-token script to handle both PAT and GitHub App credentials
-            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$custom_token")
-            echo "GH_TOKEN=${GH_TOKEN_VALUE}" >> $GITHUB_ENV
-          fi
-
       - name: Comment on test PR (on failure)
         if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.prepare_and_setup.outputs.disable_comments == 'false'
         env:
           TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
+          TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
           NOTICE_COMMENT_TAG: ${{ needs.prepare_and_setup.outputs.notice_comment_tag }}
         run: |
           body="**Automatic ${TEST_BRANCH} update failed.**
@@ -323,7 +282,7 @@ jobs:
         env:
           FEATURE_BRANCH: ${{ needs.prepare_and_setup.outputs.feature_branch }}
           TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
-          TEST_PR_URL: ${{ needs.create_update_pr.outputs.test_pr_url }}
+          TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
           NOTICE_COMMENT_TAG: ${{ needs.prepare_and_setup.outputs.notice_comment_tag }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
         run: |
