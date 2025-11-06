@@ -179,27 +179,45 @@ jobs:
           PR_EXISTS: ${{ needs.setup.outputs.pr_exists }}
           FEATURE_TITLE: ${{ github.event.issue.title }}
           FEATURE_PR_URL: ${{ github.event.issue.url }}
-          ASSIGNEE: ${{ github.event.issue.assignee }}
+          ASSIGNEES_JSON: ${{ toJSON(github.event.issue.assignees) }}
         run: |
           feature_test_title="${FEATURE_TITLE} - Test"
           echo "PR title: ${feature_test_title}"
           body="This automated pull request adds the cherry-picked changes from \`${FEATURE_BRANCH}\` to \`${TEST_BRANCH}\`.
           See ${FEATURE_PR_URL} for more details."
 
+          # Extract assignee logins from JSON array and format as comma-separated list
+          ASSIGNEES=$(echo "${ASSIGNEES_JSON}" | jq -r 'map(.login) | join(",")')
+
           if [ "${PR_EXISTS}" == 'false' ]; then
-            TEST_PR_URL=$(gh pr create \
-              --base "${TEST_BRANCH}" \
-              --head "${FEATURE_TEST_BRANCH}" \
-              --title "${feature_test_title}" \
-              --label "${BOT_LABEL}" \
-              --assignee "${ASSIGNEE}" \
-              --body "${body}")
+            if [ -n "${ASSIGNEES}" ]; then
+              TEST_PR_URL=$(gh pr create \
+                --base "${TEST_BRANCH}" \
+                --head "${FEATURE_TEST_BRANCH}" \
+                --title "${feature_test_title}" \
+                --label "${BOT_LABEL}" \
+                --assignee "${ASSIGNEES}" \
+                --body "${body}")
+            else
+              TEST_PR_URL=$(gh pr create \
+                --base "${TEST_BRANCH}" \
+                --head "${FEATURE_TEST_BRANCH}" \
+                --title "${feature_test_title}" \
+                --label "${BOT_LABEL}" \
+                --body "${body}")
+            fi
             echo "::notice::${TEST_PR_URL} created."
           else
-            TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
-              --title "${feature_test_title}" \
-              --body "${body}" \
-              --add-assignee "${ASSIGNEE}")
+            if [ -n "${ASSIGNEES}" ]; then
+              TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
+                --title "${feature_test_title}" \
+                --body "${body}" \
+                --add-assignee "${ASSIGNEES}")
+            else
+              TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
+                --title "${feature_test_title}" \
+                --body "${body}")
+            fi
             echo "::notice::${TEST_PR_URL} updated."
           fi
 
