@@ -18,6 +18,16 @@ if [ -z "$TOKEN_INPUT" ]; then
     exit 1
 fi
 
+# Function to cleanup temporary files
+cleanup_temp_files() {
+    if [ -n "$TEMP_KEY" ] && [ -f "$TEMP_KEY" ]; then
+        rm -f "$TEMP_KEY"
+    fi
+}
+
+# Set trap to ensure cleanup on exit
+trap cleanup_temp_files EXIT
+
 # Check if the input is a JSON object (GitHub App credentials)
 if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     # Extract GitHub App credentials from JSON
@@ -43,15 +53,13 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     # Create signature
     JWT_UNSIGNED="${JWT_HEADER}.${JWT_PAYLOAD}"
     
-    # Save private key to temporary file
+    # Save private key to temporary file with secure permissions
     TEMP_KEY=$(mktemp)
+    chmod 600 "$TEMP_KEY"
     echo "$PRIVATE_KEY" > "$TEMP_KEY"
     
     # Sign the JWT
     JWT_SIGNATURE=$(echo -n "${JWT_UNSIGNED}" | openssl dgst -binary -sha256 -sign "$TEMP_KEY" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
-    
-    # Clean up temp file
-    rm -f "$TEMP_KEY"
     
     # Complete JWT
     JWT="${JWT_UNSIGNED}.${JWT_SIGNATURE}"
@@ -65,10 +73,20 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
         exit 1
     fi
     
-    # Get installation ID
-    INSTALLATION_RESPONSE=$(curl -s -H "Authorization: Bearer ${JWT}" \
+    # Get installation ID with error handling
+    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
+        -H "Authorization: Bearer ${JWT}" \
         -H "Accept: application/vnd.github+json" \
         "https://api.github.com/repos/${REPO_FULL_NAME}/installation")
+    
+    HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
+    INSTALLATION_RESPONSE=$(echo "$HTTP_RESPONSE" | sed '$d')
+    
+    if [ "$HTTP_CODE" -ne 200 ]; then
+        echo "Error: Failed to get installation ID (HTTP ${HTTP_CODE})" >&2
+        echo "Response: $INSTALLATION_RESPONSE" >&2
+        exit 1
+    fi
     
     INSTALLATION_ID=$(echo "$INSTALLATION_RESPONSE" | jq -r '.id // empty')
     
@@ -78,11 +96,20 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
         exit 1
     fi
     
-    # Generate installation access token
-    TOKEN_RESPONSE=$(curl -s -X POST \
+    # Generate installation access token with error handling
+    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer ${JWT}" \
         -H "Accept: application/vnd.github+json" \
         "https://api.github.com/app/installations/${INSTALLATION_ID}/access_tokens")
+    
+    HTTP_CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
+    TOKEN_RESPONSE=$(echo "$HTTP_RESPONSE" | sed '$d')
+    
+    if [ "$HTTP_CODE" -ne 201 ]; then
+        echo "Error: Failed to generate installation token (HTTP ${HTTP_CODE})" >&2
+        echo "Response: $TOKEN_RESPONSE" >&2
+        exit 1
+    fi
     
     INSTALLATION_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
     
