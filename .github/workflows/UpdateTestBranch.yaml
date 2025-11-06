@@ -169,6 +169,7 @@ jobs:
 
       - name: Create/Update test pull request
         id: create_pr
+        if: needs.setup.outputs.pr_exists == 'true' || needs.call_core_workflow.outputs.no_changes == 'false'
         env:
           FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
           BASE_BRANCH: ${{ needs.setup.outputs.base_branch }}
@@ -204,14 +205,17 @@ jobs:
 
           pr_number=$(basename "${TEST_PR_URL}")
 
+          echo "TEST_PR_EXISTS=true" >> $GITHUB_OUTPUT
           echo "TEST_PR_URL=${TEST_PR_URL}" >> $GITHUB_OUTPUT
           echo "TEST_PR_NUMBER=${pr_number}" >> $GITHUB_OUTPUT
 
       - name: Set pull request status
+        if: needs.setup.outputs.pr_exists == 'true'
         env:
           TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
+          NO_CHANGES: ${{ needs.call_core_workflow.outputs.no_changes }}
         run: |
           if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
             gh pr ready "${FEATURE_TEST_BRANCH}"
@@ -220,7 +224,7 @@ jobs:
           fi
 
       - name: Enable auto-merge on test PR
-        if: needs.call_core_workflow.outputs.cherry_pick_success == 'true'
+        if: needs.setup.outputs.pr_exists == 'true' && needs.call_core_workflow.outputs.cherry_pick_success == 'true'
         env:
           TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
         run: |
@@ -283,7 +287,7 @@ jobs:
             })();
 
       - name: Comment on test PR (on failure)
-        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.call_core_workflow.outputs.no_changes == 'false' && needs.setup.outputs.disable_comments == 'false'
+        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.setup.outputs.disable_comments == 'false'
         env:
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
@@ -316,10 +320,15 @@ jobs:
           TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
           NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
+          NO_CHANGES: ${{ needs.call_core_workflow.outputs.no_changes }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           FEATURE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
+          if [ "${NO_CHANGES}" == "true" ]; then
+            body="No new changes were found in \`${FEATURE_BRANCH}\` to update the \`${TEST_BRANCH}\` branch.
+
+            [View workflow run](${RUN_URL})"
+          elif [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
             body="The cherry-picked changes from \`${FEATURE_BRANCH}\` are ready to be added to the \`${TEST_BRANCH}\` branch.
 
             A new pull request has been created to test the changes. See ${TEST_PR_URL} for more details.
@@ -336,7 +345,7 @@ jobs:
           ${body}"
 
   comment_error:
-    name: Comment on test PR on Error
+    name: Comment on test PR (Error only)
     needs: [setup, call_core_workflow, update_prs]
     runs-on: ubuntu-latest
     if: failure() && needs.setup.outputs.disable_comments == 'false'

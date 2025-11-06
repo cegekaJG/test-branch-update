@@ -76,7 +76,7 @@ jobs:
     name: Update Test Branch
     runs-on: ubuntu-latest
     outputs:
-      cherry_pick_success: ${{ steps.cherry_pick.outcome == 'success' }}
+      cherry_pick_success: ${{ steps.cherry_pick.outcome != 'failure' }}
       feature_test_branch: ${{ env.FEATURE_TEST_BRANCH }}
       picked_commits: ${{ env.PICKED_COMMITS }}
       missing_commits: ${{ env.MISSING_COMMITS }}
