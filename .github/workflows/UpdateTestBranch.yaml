@@ -19,7 +19,7 @@ env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  prepare_and_setup:
+  setup:
     name: Initialize Update
     runs-on: ubuntu-latest
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
@@ -92,12 +92,19 @@ jobs:
 
       - name: Set configuration variables
         id: set_config
+        env:
+          UPDATETESTBRANCH_TEST_BRANCH: ${{ vars.UPDATETESTBRANCH_TEST_BRANCH || env.TEST_BRANCH }}
+          UPDATETESTBRANCH_FEATURE_TEST_PREFIX: ${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}
+          UPDATETESTBRANCH_BOT_LABEL: ${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}
+          UPDATETESTBRANCH_DISABLE_COMMENTS: ${{ vars.UPDATETESTBRANCH_DISABLE_COMMENTS || env.DISABLE_COMMENTS }}
+          UPDATETESTBRANCH_NOTICE_COMMENT_TAG: ${{ vars.UPDATETESTBRANCH_NOTICE_COMMENT_TAG || env.NOTICE_COMMENT_TAG }}
         run: |
-          echo "TEST_BRANCH=${{ vars.UPDATETESTBRANCH_TEST_BRANCH || env.TEST_BRANCH }}" >> $GITHUB_OUTPUT
-          echo "FEATURE_TEST_PREFIX=${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}" >> $GITHUB_OUTPUT
-          echo "BOT_LABEL=${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}" >> $GITHUB_OUTPUT
-          echo "DISABLE_COMMENTS=${{ vars.UPDATETESTBRANCH_DISABLE_COMMENTS || env.DISABLE_COMMENTS }}" >> $GITHUB_OUTPUT
-          echo "NOTICE_COMMENT_TAG=${{ vars.UPDATETESTBRANCH_NOTICE_COMMENT_TAG || env.NOTICE_COMMENT_TAG }}" >> $GITHUB_OUTPUT
+          # Sanitize inputs to prevent code injection
+          printf 'TEST_BRANCH=%s\n' "$UPDATETESTBRANCH_TEST_BRANCH" >> $GITHUB_OUTPUT
+          printf 'FEATURE_TEST_PREFIX=%s\n' "$UPDATETESTBRANCH_FEATURE_TEST_PREFIX" >> $GITHUB_OUTPUT
+          printf 'BOT_LABEL=%s\n' "$UPDATETESTBRANCH_BOT_LABEL" >> $GITHUB_OUTPUT
+          printf 'DISABLE_COMMENTS=%s\n' "$UPDATETESTBRANCH_DISABLE_COMMENTS" >> $GITHUB_OUTPUT
+          printf 'NOTICE_COMMENT_TAG=%s\n' "$UPDATETESTBRANCH_NOTICE_COMMENT_TAG" >> $GITHUB_OUTPUT
 
       - name: Look for existing update PR
         id: check_pr
@@ -127,17 +134,17 @@ jobs:
 
   call_core_workflow:
     name: Call Core Update Workflow
-    needs: prepare_and_setup
+    needs: setup
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
     with:
-      test_branch: ${{ needs.prepare_and_setup.outputs.test_branch }}
-      feature_branch: ${{ needs.prepare_and_setup.outputs.feature_branch }}
-      base_branch: ${{ needs.prepare_and_setup.outputs.base_branch }}
-      feature_test_prefix: ${{ needs.prepare_and_setup.outputs.feature_test_prefix }}
+      test_branch: ${{ needs.setup.outputs.test_branch }}
+      feature_branch: ${{ needs.setup.outputs.feature_branch }}
+      base_branch: ${{ needs.setup.outputs.base_branch }}
+      feature_test_prefix: ${{ needs.setup.outputs.feature_test_prefix }}
 
   add_reaction:
     name: Add Reaction
-    needs: [prepare_and_setup, call_core_workflow]
+    needs: [setup, call_core_workflow]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -149,9 +156,8 @@ jobs:
 
   update_prs:
     name: Update Pull Requests
-    needs: [prepare_and_setup, call_core_workflow]
+    needs: [setup, call_core_workflow]
     runs-on: ubuntu-latest
-    if: needs.call_core_workflow.outputs.skip_all == 'false' && needs.call_core_workflow.outputs.no_changes == 'false'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -162,12 +168,12 @@ jobs:
       - name: Create/Update test pull request
         id: create_pr
         env:
-          FEATURE_BRANCH: ${{ needs.prepare_and_setup.outputs.feature_branch }}
-          BASE_BRANCH: ${{ needs.prepare_and_setup.outputs.base_branch }}
-          TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
-          BOT_LABEL: ${{ needs.prepare_and_setup.outputs.bot_label }}
+          FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
+          BASE_BRANCH: ${{ needs.setup.outputs.base_branch }}
+          TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
+          BOT_LABEL: ${{ needs.setup.outputs.bot_label }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          PR_EXISTS: ${{ needs.prepare_and_setup.outputs.pr_exists }}
+          PR_EXISTS: ${{ needs.setup.outputs.pr_exists }}
           FEATURE_TITLE: ${{ github.event.issue.title }}
           FEATURE_PR_URL: ${{ github.event.issue.url }}
           ASSIGNEE: ${{ github.event.issue.assignee }}
@@ -224,12 +230,14 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
+          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
         with:
           script: |
             (async () => {
               let newPrComments = [];
-              if ("${{ steps.create_pr.outputs.TEST_PR_URL }}") {
-                const urlSubstrings = "${{ steps.create_pr.outputs.TEST_PR_URL }}".split('/');
+              if (TEST_PR_URL) {
+                const urlSubstrings = TEST_PR_URL.split('/');
                 const newPrNumber = urlSubstrings[urlSubstrings.length - 1];
                 try {
                   newPrComments = await github.rest.issues.listComments({
@@ -256,7 +264,7 @@ jobs:
               const allComments = [oldPrComments, newPrComments];
               for (const comments of allComments) {
                 for (const comment of comments.data) {
-                  if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ needs.prepare_and_setup.outputs.notice_comment_tag }}')) {
+                  if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith(NOTICE_COMMENT_TAG)) {
                     try {
                       await github.rest.issues.deleteComment({
                         comment_id: comment.id,
@@ -273,12 +281,13 @@ jobs:
             })();
 
       - name: Comment on test PR (on failure)
-        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.prepare_and_setup.outputs.disable_comments == 'false'
+        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.setup.outputs.disable_comments == 'false'
         env:
-          TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
+          TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
-          NOTICE_COMMENT_TAG: ${{ needs.prepare_and_setup.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
+          MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
         run: |
           body="**Automatic ${TEST_BRANCH} update failed.**
 
@@ -289,31 +298,61 @@ jobs:
           git fetch origin ${FEATURE_TEST_BRANCH}
           git checkout ${FEATURE_TEST_BRANCH}
           git reset --hard origin/${FEATURE_TEST_BRANCH}
+          git cherry-pick -x ${MISSING_COMMITS}
           \`\`\`
           2) Manually cherry-pick the failing commits and resolve any conflicts.
-          3) Push the changes and the PR will be updated automatically.
-          4) Re-run the workflow by commenting \`!update-test\` in ${{ github.event.issue.pull_request.html_url }} again."
+          3) Push the changes and set the PR to ready for review.
 
           gh pr comment "${TEST_PR_URL}" --body "${NOTICE_COMMENT_TAG}
           ${body}"
 
       - name: Comment on original PR
-        if: needs.prepare_and_setup.outputs.disable_comments == 'false'
+        if: needs.setup.outputs.disable_comments == 'false'
         env:
-          FEATURE_BRANCH: ${{ needs.prepare_and_setup.outputs.feature_branch }}
-          TEST_BRANCH: ${{ needs.prepare_and_setup.outputs.test_branch }}
+          FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
+          TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
-          NOTICE_COMMENT_TAG: ${{ needs.prepare_and_setup.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FEATURE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
             body="The cherry-picked changes from \`${FEATURE_BRANCH}\` are ready to be added to the \`${TEST_BRANCH}\` branch.
 
-            A new pull request has been created to test the changes. See ${TEST_PR_URL} for more details."
+            A new pull request has been created to test the changes. See ${TEST_PR_URL} for more details.
+
+            [View workflow run](${RUN_URL})"
           else
             body="Unable to cherry-pick the changes from \`${FEATURE_BRANCH}\` to the \`${TEST_BRANCH}\` branch.
 
-            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${TEST_PR_URL} for more details."
+            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${TEST_PR_URL} for more details.
+
+            [View workflow run](${RUN_URL})"
           fi
-          gh pr comment ${{ github.event.issue.number }} --body "${NOTICE_COMMENT_TAG}
+          gh pr comment ${FEATURE_NUMBER} --body "${NOTICE_COMMENT_TAG}
+          ${body}"
+
+  comment_error:
+    name: Comment on test PR on Error
+    needs: [setup, call_core_workflow, update_prs]
+    runs-on: ubuntu-latest
+    if: failure() && needs.setup.outputs.disable_comments == 'false'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+
+      - name: Comment on original PR
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FEATURE_NUMBER: ${{ github.event.issue.number }}
+          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag || env.NOTICE_COMMENT_TAG }}
+        run: |
+          body="An error occurred while updating the test branch. Please check the workflow run for details:
+          [View workflow run](${RUN_URL})"
+
+          gh pr comment ${FEATURE_NUMBER} --body "${NOTICE_COMMENT_TAG}
           ${body}"
