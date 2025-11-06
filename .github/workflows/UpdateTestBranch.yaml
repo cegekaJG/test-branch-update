@@ -61,7 +61,9 @@ jobs:
           EOF
             exit 1
           else
-            echo "GH_TOKEN=$CUSTOM_TOKEN" >> $GITHUB_ENV
+            # Use the get-gh-token script to handle both PAT and GitHub App credentials
+            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
+            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
           fi
 
       - name: Get PR information
@@ -283,7 +285,9 @@ jobs:
               echo "::error::The secret '${token_name}' is required but has no value."
               exit 1
             fi
-            echo "GH_TOKEN=${custom_token}" >> $GITHUB_ENV
+            # Use the get-gh-token script to handle both PAT and GitHub App credentials
+            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$custom_token")
+            echo "GH_TOKEN=${GH_TOKEN_VALUE}" >> $GITHUB_ENV
           fi
 
       - name: Comment on test PR (on failure)
