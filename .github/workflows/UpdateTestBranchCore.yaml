@@ -300,9 +300,9 @@ jobs:
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits to cherry-pick found. Skipping update."
           else
-            echo "::notice:: New commits to cherry-pick:"
+            echo "New commits to cherry-pick:" > $GITHUB_STEP_SUMMARY
             for commit in "${new_commits[@]}"; do
-              echo "::notice:: - $commit"
+              echo "- $commit" >> $GITHUB_STEP_SUMMARY
             done
           fi
 
