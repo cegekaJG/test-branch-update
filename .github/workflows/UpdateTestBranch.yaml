@@ -241,6 +241,9 @@ jobs:
         with:
           script: |
             (async () => {
+              const TEST_PR_URL = process.env.TEST_PR_URL;
+              const NOTICE_COMMENT_TAG = process.env.NOTICE_COMMENT_TAG;
+
               let newPrComments = [];
               if (TEST_PR_URL) {
                 const urlSubstrings = TEST_PR_URL.split('/');
