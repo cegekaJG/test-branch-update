@@ -49,15 +49,15 @@ jobs:
 
       - name: Setup GH_TOKEN
         env:
-          CUSTOM_TOKEN: ${{ secrets.GHTOKENWORKFLOW }}
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
         run: |
           if [ -z "$CUSTOM_TOKEN" ]; then
-            echo "::error::The GHTOKENWORKFLOW secret is required."
+            echo "::error::The UPDATETESTTOKEN secret is required."
             cat << 'EOF'
-          ::error:: ## ⚠️ GHTOKENWORKFLOW Secret Not Found
+          ::error:: ## ⚠️ UPDATETESTTOKEN Secret Not Found
 
-          The GHTOKENWORKFLOW secret is required to automatically trigger pull request workflows.
-          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
+          The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
+          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/UpdateTestToken.md
           EOF
             exit 1
           else
@@ -277,13 +277,13 @@ jobs:
           token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME }}"
 
           if [ -z "${token_name}" ]; then
-            token_name="GHTOKENWORKFLOW"
+            token_name="UPDATETESTTOKEN"
           fi
 
           if [ "${token_name}" = "GITHUB_TOKEN" ]; then
             echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
           else
-            custom_token="${{ secrets.GHTOKENWORKFLOW }}"
+            custom_token="${{ secrets.UPDATETESTTOKEN }}"
             if [ -z "${custom_token}" ]; then
               echo "::error::The secret '${token_name}' is required but has no value."
               exit 1

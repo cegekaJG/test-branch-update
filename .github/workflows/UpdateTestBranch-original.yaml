@@ -91,10 +91,10 @@ jobs:
       - name: Setup GH_TOKEN
         if: ${{ env.SKIP_ALL == 'false' && env.USE_GITHUB_TOKEN == 'false' }}
         run: |
-          token='${{ secrets.GHTOKENWORKFLOW }}'
+          token='${{ secrets.UPDATETESTTOKEN }}'
           if [ -z "$token" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
-            echo "::error::The GHTOKENWORKFLOW secret is required."
+            echo "::error::The UPDATETESTTOKEN secret is required."
             exit 1
           fi
           echo "GH_TOKEN=$token" >> $GITHUB_ENV
