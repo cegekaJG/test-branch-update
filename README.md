@@ -29,7 +29,11 @@ The main wrapper workflow that handles PR comments (`!update-test`) and coordina
 - Creates or updates pull requests for test branch changes
 - Handles post-processing like reactions and comment cleanup
 
-**Requirements**: This workflow requires a `GHTOKENWORKFLOW` secret (Personal Access Token with `repo` scope) to automatically trigger pull request workflows. The workflow will fail if this secret is not configured. For setup instructions, see [GhTokenWorkflow documentation](https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md).
+**Requirements**: This workflow requires a `GHTOKENWORKFLOW` secret to automatically trigger pull request workflows. The secret can be either:
+- A Personal Access Token (PAT) with `repo` scope
+- GitHub App credentials in JSON format: `{"GitHubAppClientId":"...","PrivateKey":"..."}`
+
+The workflow will fail if this secret is not configured. For PAT setup instructions, see [GhTokenWorkflow documentation](https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md).
 
 #### Usage
 Comment `!update-test` on any pull request to trigger the workflow.
