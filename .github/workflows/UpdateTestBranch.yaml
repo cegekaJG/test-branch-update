@@ -147,8 +147,8 @@ jobs:
           comment-id: ${{ github.event.comment.id }}
           reactions: ${{ needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '+1' || '-1' }}
 
-  create_update_pr:
-    name: Create/Update Pull Request
+  update_prs:
+    name: Update Pull Requests
     needs: [prepare_and_setup, call_core_workflow]
     runs-on: ubuntu-latest
     if: needs.call_core_workflow.outputs.skip_all == 'false' && needs.call_core_workflow.outputs.no_changes == 'false'
@@ -159,7 +159,7 @@ jobs:
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
 
-      - name: Create/Update pull request
+      - name: Create/Update test pull request
         id: create_pr
         env:
           FEATURE_BRANCH: ${{ needs.prepare_and_setup.outputs.feature_branch }}
@@ -207,12 +207,17 @@ jobs:
         run: |
           if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
             gh pr ready "${FEATURE_TEST_BRANCH}"
-
-            # Enable auto-merge using gh CLI (requires repo admin permissions)
-            gh pr merge "$TEST_PR_NUMBER" --auto --merge || echo "::notice::Auto-merge could not be enabled."
           else
             gh pr ready --undo "${FEATURE_TEST_BRANCH}"
           fi
+
+      - name: Enable auto-merge on test PR
+        if: needs.call_core_workflow.outputs.cherry_pick_success == 'true'
+        env:
+          TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
+        run: |
+          # Enable auto-merge using gh CLI (requires repo admin permissions)
+          gh pr merge "$TEST_PR_NUMBER" --auto --squash || echo "::notice::Auto-merge could not be enabled."
 
       - name: Clean up old comments
         uses: actions/github-script@v7
