@@ -130,6 +130,8 @@ jobs:
           if [ -z "$(gh label list --search "${BOT_LABEL}" --limit 1)" ]; then
             gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"
             echo "::notice::Label ${BOT_LABEL} added to repository."
+          else
+            echo "Label ${BOT_LABEL} found."
           fi
 
   call_core_workflow:
@@ -230,7 +232,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
+          TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
           NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
         with:
           script: |
@@ -281,11 +283,11 @@ jobs:
             })();
 
       - name: Comment on test PR (on failure)
-        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.setup.outputs.disable_comments == 'false'
+        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.call_core_workflow.outputs.no_changes == 'false' && needs.setup.outputs.disable_comments == 'false'
         env:
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
+          TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
           NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
           MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
         run: |
@@ -311,7 +313,7 @@ jobs:
         env:
           FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
-          TEST_PR_URL: ${{ steps.create_pr.outputs.TEST_PR_URL }}
+          TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
           NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
