@@ -18,6 +18,12 @@ if [ -z "$TOKEN_INPUT" ]; then
     exit 1
 fi
 
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed" >&2
+    exit 1
+fi
+
 # Function to cleanup temporary files
 cleanup_temp_files() {
     if [ -n "$TEMP_KEY" ] && [ -f "$TEMP_KEY" ]; then

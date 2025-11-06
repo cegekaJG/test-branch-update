@@ -269,6 +269,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+
       - name: Setup GH_TOKEN
         run: |
           token_name="${{ vars.UPDATETESTBRANCH_TOKEN_NAME }}"
