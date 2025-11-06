@@ -18,9 +18,19 @@ if [ -z "$TOKEN_INPUT" ]; then
     exit 1
 fi
 
-# Check if jq is available
+# Check if required tools are available
 if ! command -v jq &> /dev/null; then
     echo "Error: jq is required but not installed" >&2
+    exit 1
+fi
+
+if ! command -v openssl &> /dev/null; then
+    echo "Error: openssl is required but not installed" >&2
+    exit 1
+fi
+
+if ! command -v curl &> /dev/null; then
+    echo "Error: curl is required but not installed" >&2
     exit 1
 fi
 
@@ -90,7 +100,9 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     
     if [ "$HTTP_CODE" -ne 200 ]; then
         echo "Error: Failed to get installation ID (HTTP ${HTTP_CODE})" >&2
-        echo "Response: $INSTALLATION_RESPONSE" >&2
+        # Only log error message, not full response to avoid exposing sensitive data
+        ERROR_MSG=$(echo "$INSTALLATION_RESPONSE" | jq -r '.message // "Unknown error"' 2>/dev/null || echo "Unknown error")
+        echo "Error message: $ERROR_MSG" >&2
         exit 1
     fi
     
@@ -98,7 +110,6 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     
     if [ -z "$INSTALLATION_ID" ]; then
         echo "Error: Could not get installation ID for repository ${REPO_FULL_NAME}" >&2
-        echo "Response: $INSTALLATION_RESPONSE" >&2
         exit 1
     fi
     
@@ -113,7 +124,9 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     
     if [ "$HTTP_CODE" -ne 201 ]; then
         echo "Error: Failed to generate installation token (HTTP ${HTTP_CODE})" >&2
-        echo "Response: $TOKEN_RESPONSE" >&2
+        # Only log error message, not full response to avoid exposing sensitive data
+        ERROR_MSG=$(echo "$TOKEN_RESPONSE" | jq -r '.message // "Unknown error"' 2>/dev/null || echo "Unknown error")
+        echo "Error message: $ERROR_MSG" >&2
         exit 1
     fi
     
@@ -121,7 +134,6 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     
     if [ -z "$INSTALLATION_TOKEN" ]; then
         echo "Error: Could not generate installation token" >&2
-        echo "Response: $TOKEN_RESPONSE" >&2
         exit 1
     fi
     
