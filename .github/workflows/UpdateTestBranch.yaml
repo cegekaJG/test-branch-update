@@ -190,34 +190,31 @@ jobs:
           ASSIGNEES=$(echo "${ASSIGNEES_JSON}" | jq -r 'if . == null or . == [] then "" else map(.login) | join(",") end')
 
           if [ "${PR_EXISTS}" == 'false' ]; then
+            # Build assignee parameter if there are assignees
+            ASSIGNEE_PARAM=""
             if [ -n "${ASSIGNEES}" ]; then
-              TEST_PR_URL=$(gh pr create \
-                --base "${TEST_BRANCH}" \
-                --head "${FEATURE_TEST_BRANCH}" \
-                --title "${feature_test_title}" \
-                --label "${BOT_LABEL}" \
-                --assignee "${ASSIGNEES}" \
-                --body "${body}")
-            else
-              TEST_PR_URL=$(gh pr create \
-                --base "${TEST_BRANCH}" \
-                --head "${FEATURE_TEST_BRANCH}" \
-                --title "${feature_test_title}" \
-                --label "${BOT_LABEL}" \
-                --body "${body}")
+              ASSIGNEE_PARAM="--assignee ${ASSIGNEES}"
             fi
+            
+            TEST_PR_URL=$(gh pr create \
+              --base "${TEST_BRANCH}" \
+              --head "${FEATURE_TEST_BRANCH}" \
+              --title "${feature_test_title}" \
+              --label "${BOT_LABEL}" \
+              ${ASSIGNEE_PARAM} \
+              --body "${body}")
             echo "::notice::${TEST_PR_URL} created."
           else
+            # Build assignee parameter if there are assignees
+            ASSIGNEE_PARAM=""
             if [ -n "${ASSIGNEES}" ]; then
-              TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
-                --title "${feature_test_title}" \
-                --body "${body}" \
-                --add-assignee "${ASSIGNEES}")
-            else
-              TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
-                --title "${feature_test_title}" \
-                --body "${body}")
+              ASSIGNEE_PARAM="--add-assignee ${ASSIGNEES}"
             fi
+            
+            TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
+              --title "${feature_test_title}" \
+              --body "${body}" \
+              ${ASSIGNEE_PARAM})
             echo "::notice::${TEST_PR_URL} updated."
           fi
 
