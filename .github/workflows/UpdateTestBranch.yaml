@@ -168,33 +168,48 @@ jobs:
           BOT_LABEL: ${{ needs.prepare_and_setup.outputs.bot_label }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           PR_EXISTS: ${{ needs.prepare_and_setup.outputs.pr_exists }}
+          FEATURE_TITLE: ${{ github.event.issue.title }}
+          FEATURE_PR_URL: ${{ github.event.issue.url }}
+          ASSIGNEE: ${{ github.event.issue.assignee }}
         run: |
-          feature_title="Test branch for ${FEATURE_BRANCH}"
-          echo "PR title: ${feature_title}"
-          body="This automated pull request adds the cherry-picked changes from \`${FEATURE_BRANCH}\` to \`${TEST_BRANCH}\`."
+          feature_test_title="${FEATURE_TITLE} - Test"
+          echo "PR title: ${feature_test_title}"
+          body="This automated pull request adds the cherry-picked changes from \`${FEATURE_BRANCH}\` to \`${TEST_BRANCH}\`.
+          See ${FEATURE_PR_URL} for more details."
 
           if [ "${PR_EXISTS}" == 'false' ]; then
             TEST_PR_URL=$(gh pr create \
               --base "${TEST_BRANCH}" \
               --head "${FEATURE_TEST_BRANCH}" \
-              --title "${feature_title}" \
+              --title "${feature_test_title}" \
               --label "${BOT_LABEL}" \
+              --assignee "${ASSIGNEE}" \
               --body "${body}")
             echo "::notice::${TEST_PR_URL} created."
           else
             TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
-              --body "${body}")
+              --title "${feature_test_title}" \
+              --body "${body}" \
+              --add-assignee "${ASSIGNEE}")
             echo "::notice::${TEST_PR_URL} updated."
           fi
+
+          pr_number=$(basename "${TEST_PR_URL}")
+
           echo "TEST_PR_URL=${TEST_PR_URL}" >> $GITHUB_OUTPUT
+          echo "TEST_PR_NUMBER=${pr_number}" >> $GITHUB_OUTPUT
 
       - name: Set pull request status
         env:
+          TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
         run: |
           if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
             gh pr ready "${FEATURE_TEST_BRANCH}"
+
+            # Enable auto-merge using gh CLI (requires repo admin permissions)
+            gh pr merge "$TEST_PR_NUMBER" --auto --merge || echo "::notice::Auto-merge could not be enabled."
           else
             gh pr ready --undo "${FEATURE_TEST_BRANCH}"
           fi
