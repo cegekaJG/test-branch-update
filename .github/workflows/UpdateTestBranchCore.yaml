@@ -218,7 +218,9 @@ jobs:
           fi
 
           if [ -z "$feature_test_bodies" ]; then
-            echo "::notice::No new commits in \"$feature_test_branch\" found."
+            echo "No new commits in \"$FEATURE_TEST_BRANCH\" found."
+            echo "PICKED_COMMITS=" >> $GITHUB_ENV
+            exit 0
           fi
 
           feature_test_bodies=${feature_test_bodies%$commit_separator}
@@ -245,6 +247,12 @@ jobs:
             done <<< "$commits"
           done
           unset IFS
+
+          if [ ${#picked_commits[@]} -eq 0 ]; then
+            echo "No previously cherry-picked commits found."
+            echo "PICKED_COMMITS=" >> $GITHUB_ENV
+            exit 0
+          fi
 
           echo "Cherry-picked commits:"
           for commit in "${picked_commits[@]}"; do
@@ -292,9 +300,9 @@ jobs:
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "::notice::No new commits to cherry-pick found. Skipping update."
           else
-            echo "New commits to cherry-pick:"
+            echo "::notice:: New commits to cherry-pick:"
             for commit in "${new_commits[@]}"; do
-              echo "- $commit"
+              echo "::notice:: - $commit"
             done
           fi
 
@@ -386,7 +394,7 @@ jobs:
 
           echo -e 'Feature commits: '"${feature_commits[*]}"
           if [ -n "$picked_commits" ]; then
-            echo -e 'Picked commits: '"${picked_commits[*]}"
+            echo -e '::notice:: Picked commits: '"${picked_commits[*]}"
           fi
 
           missing_commits=()
@@ -395,7 +403,7 @@ jobs:
               missing_commits+=($commit)
             fi
           done
-          echo 'Missing commits: '"${missing_commits[*]}"
+          echo '::notice:: Missing commits: '"${missing_commits[*]}"
 
           {
             echo "MISSING_COMMITS<<EOF"
@@ -417,7 +425,3 @@ jobs:
           fi
           git push origin "${FEATURE_TEST_BRANCH}"
           echo "NO_CHANGES=false" >> $GITHUB_ENV
-
-
-
-
