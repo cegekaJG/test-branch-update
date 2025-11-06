@@ -145,7 +145,7 @@ jobs:
         uses: peter-evans/create-or-update-comment@v4
         with:
           comment-id: ${{ github.event.comment.id }}
-          reactions: ${{ needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '+1' || '-1' }}
+          reactions: ${{ needs.call_core_workflow.outputs.no_changes == 'true' && 'eyes' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '+1' || '-1') }}
 
   update_prs:
     name: Update Pull Requests
@@ -254,8 +254,8 @@ jobs:
                 process.exit(1);
               }
               const allComments = [oldPrComments, newPrComments];
-              allComments.forEach(comments => {
-                comments.data.forEach(comment => {
+              for (const comments of allComments) {
+                for (const comment of comments.data) {
                   if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith('${{ needs.prepare_and_setup.outputs.notice_comment_tag }}')) {
                     try {
                       await github.rest.issues.deleteComment({
@@ -268,8 +268,8 @@ jobs:
                       process.stdout.write(`::notice::Error deleting comment ${comment.html_url}: ${error.message}\n`);
                     }
                   }
-                });
-              });
+                }
+              }
             })();
 
       - name: Comment on test PR (on failure)
