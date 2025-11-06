@@ -65,9 +65,10 @@ permissions:
 env:
   SKIP_ALL: false
   FEATURE_COMMITS: ''
+  FEATURE_TEST_BRANCH: ''
   PICKED_COMMITS: ''
   ADDED_COMMITS: ''
-  NO_CHANGES: false
+  NO_CHANGES: true
   MISSING_COMMITS: ''
 
 jobs:
@@ -156,6 +157,7 @@ jobs:
 
           if [ -z "$feature_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
+            echo "NO_CHANGES=true" >> $GITHUB_ENV
             echo "::notice::No new commits found. Skipping update."
             exit 0
           fi
@@ -298,6 +300,7 @@ jobs:
 
           if [ ${#new_commits[@]} -eq 0 ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
+            echo "NO_CHANGES=true" >> $GITHUB_ENV
             echo "::notice::No new commits to cherry-pick found. Skipping update."
           else
             echo "New commits to cherry-pick:" > $GITHUB_STEP_SUMMARY
