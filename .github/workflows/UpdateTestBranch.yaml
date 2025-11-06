@@ -154,7 +154,7 @@ jobs:
         uses: peter-evans/create-or-update-comment@v4
         with:
           comment-id: ${{ github.event.comment.id }}
-          reactions: ${{ needs.call_core_workflow.outputs.no_changes == 'true' && 'eyes' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '+1' || '-1') }}
+          reactions: ${{ needs.call_core_workflow.result != 'success' && 'confused' || needs.call_core_workflow.outputs.no_changes == 'true' && 'eyes' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '+1' || '-1') }}
 
   update_prs:
     name: Update Pull Requests
