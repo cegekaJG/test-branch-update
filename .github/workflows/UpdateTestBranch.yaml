@@ -153,7 +153,7 @@ jobs:
     name: Add Reaction
     needs: [setup, call_core_workflow]
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
     steps:
       - name: Add reaction based on outcome
         uses: peter-evans/create-or-update-comment@v4
@@ -206,6 +206,7 @@ jobs:
               --head "${FEATURE_TEST_BRANCH}" \
               --title "${feature_test_title}" \
               --label "${BOT_LABEL}" \
+              --draft \
               ${ASSIGNEE_PARAM} \
               --body "${body}")
             echo "::notice::${TEST_PR_URL} created."
@@ -230,7 +231,7 @@ jobs:
           echo "TEST_PR_NUMBER=${pr_number}" >> $GITHUB_OUTPUT
 
       - name: Set pull request status
-        if: needs.setup.outputs.pr_exists == 'true'
+        if: steps.create_pr.outputs.test_pr_exists == 'true'
         env:
           TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
@@ -244,7 +245,7 @@ jobs:
           fi
 
       - name: Enable auto-merge on test PR
-        if: needs.setup.outputs.pr_exists == 'true' && needs.call_core_workflow.outputs.cherry_pick_success == 'true' && needs.setup.outputs.automerge == 'true'
+        if: steps.create_pr.outputs.test_pr_exists == 'true' && needs.call_core_workflow.outputs.cherry_pick_success == 'true' && needs.setup.outputs.automerge == 'true'
         env:
           TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
         run: |
