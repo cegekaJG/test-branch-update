@@ -179,27 +179,42 @@ jobs:
           PR_EXISTS: ${{ needs.setup.outputs.pr_exists }}
           FEATURE_TITLE: ${{ github.event.issue.title }}
           FEATURE_PR_URL: ${{ github.event.issue.url }}
-          ASSIGNEE: ${{ github.event.issue.assignee }}
+          ASSIGNEES_JSON: ${{ toJSON(github.event.issue.assignees) }}
         run: |
           feature_test_title="${FEATURE_TITLE} - Test"
           echo "PR title: ${feature_test_title}"
           body="This automated pull request adds the cherry-picked changes from \`${FEATURE_BRANCH}\` to \`${TEST_BRANCH}\`.
           See ${FEATURE_PR_URL} for more details."
 
+          # Extract assignee logins from JSON array and format as comma-separated list
+          ASSIGNEES=$(echo "${ASSIGNEES_JSON}" | jq -r 'if . == null or . == [] then "" else map(.login) | join(",") end')
+
           if [ "${PR_EXISTS}" == 'false' ]; then
+            # Build assignee parameter if there are assignees
+            ASSIGNEE_PARAM=""
+            if [ -n "${ASSIGNEES}" ]; then
+              ASSIGNEE_PARAM="--assignee ${ASSIGNEES}"
+            fi
+            
             TEST_PR_URL=$(gh pr create \
               --base "${TEST_BRANCH}" \
               --head "${FEATURE_TEST_BRANCH}" \
               --title "${feature_test_title}" \
               --label "${BOT_LABEL}" \
-              --assignee "${ASSIGNEE}" \
+              ${ASSIGNEE_PARAM} \
               --body "${body}")
             echo "::notice::${TEST_PR_URL} created."
           else
+            # Build assignee parameter if there are assignees
+            ASSIGNEE_PARAM=""
+            if [ -n "${ASSIGNEES}" ]; then
+              ASSIGNEE_PARAM="--add-assignee ${ASSIGNEES}"
+            fi
+            
             TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
               --title "${feature_test_title}" \
               --body "${body}" \
-              --add-assignee "${ASSIGNEE}")
+              ${ASSIGNEE_PARAM})
             echo "::notice::${TEST_PR_URL} updated."
           fi
 
