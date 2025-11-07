@@ -70,13 +70,14 @@ env:
   ADDED_COMMITS: ''
   NO_CHANGES: true
   MISSING_COMMITS: ''
+  CHERRY_PICK_FAILED: false
 
 jobs:
   update_test_branch:
     name: Update Test Branch
     runs-on: ubuntu-latest
     outputs:
-      cherry_pick_success: ${{ steps.cherry_pick.outcome != 'failure' }}
+      cherry_pick_success: ${{ env.CHERRY_PICK_FAILED == 'false' }}
       feature_test_branch: ${{ env.FEATURE_TEST_BRANCH }}
       picked_commits: ${{ env.PICKED_COMMITS }}
       missing_commits: ${{ env.MISSING_COMMITS }}
@@ -318,7 +319,6 @@ jobs:
           } >> $GITHUB_ENV
 
       - name: Cherry-pick new commits
-        continue-on-error: true
         id: cherry_pick
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
@@ -350,6 +350,11 @@ jobs:
           done
 
           echo "NO_CHANGES=$no_changes" >> $GITHUB_ENV
+          if [ "$success" = "false" ]; then
+            echo "CHERRY_PICK_FAILED=true" >> $GITHUB_ENV
+          else
+            echo "CHERRY_PICK_FAILED=false" >> $GITHUB_ENV
+          fi
           {
             echo "PICKED_COMMITS<<EOF"
             for commit in "${successful_commits[@]}"; do
@@ -358,15 +363,14 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
 
-          if [ $success == false ]; then
+          if [ "$success" = "false" ]; then
             echo "::error::Cherry-pick failed."
-            exit 1
           else
             echo "Cherry-pick successful."
           fi
 
       - name: "On success: Commit & push cherry-picked changes"
-        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'success' }}
+        if: ${{ env.SKIP_ALL == 'false' && env.CHERRY_PICK_FAILED == 'false' }}
         env:
           TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
         run: |
@@ -390,7 +394,7 @@ jobs:
           fi
 
       - name: "On failure: Determine missing commits"
-        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
+        if: ${{ env.SKIP_ALL == 'false' && env.CHERRY_PICK_FAILED == 'true' }}
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
@@ -415,7 +419,7 @@ jobs:
           } >> $GITHUB_ENV
 
       - name: "On failure: Abort cherry-pick & push changes"
-        if: ${{ env.SKIP_ALL == 'false' && steps.cherry_pick.outcome == 'failure' }}
+        if: ${{ env.SKIP_ALL == 'false' && env.CHERRY_PICK_FAILED == 'true' }}
         env:
           FEATURE_BRANCH_INPUT: ${{ inputs.feature_branch }}
         run: |
