@@ -350,7 +350,7 @@ jobs:
           done
 
           echo "NO_CHANGES=$no_changes" >> $GITHUB_ENV
-          echo "CHERRY_PICK_FAILED=$([[ $success == false ]] && echo true || echo false)" >> $GITHUB_ENV
+          echo "CHERRY_PICK_FAILED=$([[ $success = false ]] && echo true || echo false)" >> $GITHUB_ENV
           {
             echo "PICKED_COMMITS<<EOF"
             for commit in "${successful_commits[@]}"; do
@@ -359,7 +359,7 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
 
-          if [ $success == false ]; then
+          if [ $success = false ]; then
             echo "::error::Cherry-pick failed."
           else
             echo "Cherry-pick successful."
