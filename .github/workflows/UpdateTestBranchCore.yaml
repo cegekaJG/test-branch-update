@@ -234,7 +234,7 @@ jobs:
             echo "::debug::Full message:"
             echo "::debug::$msg"
             # Find all cherry-pick notices in the message (handles squash commits with multiple cherry-picks)
-            commits=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))')
+            commits=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))' || true)
             if [[ -z "$commits" ]]; then
               continue
             fi
