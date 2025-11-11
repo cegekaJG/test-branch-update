@@ -89,7 +89,6 @@ jobs:
         run: |
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config set advice.mergeConflict false
 
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -115,6 +114,9 @@ jobs:
           printf 'FEATURE_TEST_BRANCH=%s%s\n' "${FEATURE_TEST_PREFIX_INPUT}" "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
           printf 'HEAD_REF=%s\n' "${FEATURE_BRANCH_INPUT}" >> $GITHUB_ENV
           printf 'BASE_REF=%s\n' "${BASE_BRANCH_INPUT}" >> $GITHUB_ENV
+
+          # Set git settings
+          git config set advice.mergeConflict false
 
       - name: Check branch settings
         if: ${{ env.SKIP_ALL == 'false' }}
