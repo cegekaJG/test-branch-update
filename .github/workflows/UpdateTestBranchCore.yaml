@@ -370,7 +370,7 @@ jobs:
           } >> $GITHUB_ENV
 
           if [ "$success" = "false" ]; then
-            echo "::error::Cherry-pick failed."
+            echo "Cherry-pick failed."
           else
             echo "Cherry-pick successful."
           fi
@@ -410,7 +410,7 @@ jobs:
 
           echo -e 'Feature commits: '"${feature_commits[*]}"
           if [ -n "$picked_commits" ]; then
-            echo -e '::notice:: Picked commits: '"${picked_commits[*]}"
+            echo -e 'Picked commits: '"${picked_commits[*]}"
           fi
 
           missing_commits=()
@@ -419,7 +419,11 @@ jobs:
               missing_commits+=($commit)
             fi
           done
-          echo '::notice:: Missing commits: '"${missing_commits[*]}"
+
+          echo '### Missing commits' >> $GITHUB_STEP_SUMMARY
+          while IFS= read -r commit; do
+            echo "$(git log --pretty=format:"- %s (%H)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
+          done <<< "${missing_commits[*]}"
 
           {
             echo "MISSING_COMMITS<<EOF"
