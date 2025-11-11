@@ -304,7 +304,8 @@ jobs:
             done
           fi
 
-          echo "## Commits to cherry-pick:"
+          echo "## Commits to cherry-pick:" >> $GITHUB_STEP_SUMMARY
+
           if [ ${#new_commits[@]} -eq 0 ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "NO_CHANGES=true" >> $GITHUB_ENV
