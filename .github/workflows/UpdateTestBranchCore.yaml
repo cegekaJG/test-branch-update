@@ -157,7 +157,7 @@ jobs:
           git fetch origin "${BASE_BRANCH_INPUT}"
           git fetch origin "${FEATURE_BRANCH_INPUT}"
 
-          feature_commits=$(git log --reverse --no-merges --pretty=format:%h "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
+          feature_commits=$(git log --reverse --no-merges --pretty=format:%H "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
 
           if [ -z "$feature_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
@@ -166,7 +166,7 @@ jobs:
             exit 0
           fi
 
-          feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%H)" "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
+          feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%h)" "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
 
           echo -e 'Feature commits:\n'"$feature_commits_pretty"
           for commit in $feature_commits; do
@@ -312,7 +312,7 @@ jobs:
             echo "No new commits to cherry-pick found. Skipping update." >> $GITHUB_STEP_SUMMARY
           else
             for commit in "${new_commits[@]}"; do
-              echo "$(git log --pretty=format:"- %s (%H)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
+              echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
             done
           fi
 
@@ -425,7 +425,7 @@ jobs:
 
           echo '### Missing commits' >> $GITHUB_STEP_SUMMARY
           while IFS= read -r commit; do
-            echo "$(git log --pretty=format:"- %s (%H)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
+            echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
           done <<< "${missing_commits[*]}"
 
           {
