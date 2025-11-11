@@ -89,6 +89,7 @@ jobs:
         run: |
           git config --global user.name github-actions[bot]
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config set advice.mergeConflict false
 
       - name: Checkout repository
         if: ${{ env.SKIP_ALL == 'false' }}
@@ -232,7 +233,9 @@ jobs:
           IFS=$commit_separator
           for msg in $feature_test_bodies; do
             echo "::debug::Full message:"
-            echo "::debug::$msg"
+            while IFS= read -r line; do
+              echo "::debug::  $line"
+            done <<< "$msg"
             # Find all cherry-pick notices in the message (handles squash commits with multiple cherry-picks)
             commits=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))' || true)
             if [[ -z "$commits" ]]; then
@@ -299,14 +302,14 @@ jobs:
             done
           fi
 
+          echo "## Commits to cherry-pick:"
           if [ ${#new_commits[@]} -eq 0 ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
             echo "NO_CHANGES=true" >> $GITHUB_ENV
-            echo "::notice::No new commits to cherry-pick found. Skipping update."
+            echo "No new commits to cherry-pick found. Skipping update." >> $GITHUB_STEP_SUMMARY
           else
-            echo "New commits to cherry-pick:" > $GITHUB_STEP_SUMMARY
             for commit in "${new_commits[@]}"; do
-              echo "- $commit" >> $GITHUB_STEP_SUMMARY
+              echo "$(git log --pretty=format:"- %s (%H)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
             done
           fi
 
@@ -323,6 +326,7 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         run: |
           feature_commits=(${{ env.FEATURE_COMMITS }})
+          echo "## Cherry-pick Process"
           echo "Cherry-picking the following commits:"
           echo "${feature_commits[*]}"
           successful_commits=()
@@ -376,6 +380,7 @@ jobs:
         env:
           TEST_BRANCH_INPUT: ${{ inputs.test_branch }}
         run: |
+          echo "**Final result: ✅ Success**" >> $GITHUB_STEP_SUMMARY
           push=false
           if [ -n "$(git status --porcelain)" ]; then
             git commit
@@ -398,6 +403,8 @@ jobs:
       - name: "On failure: Determine missing commits"
         if: ${{ env.SKIP_ALL == 'false' && env.CHERRY_PICK_FAILED == 'true' }}
         run: |
+          echo "**Final result: ❌ Failure**" >> $GITHUB_STEP_SUMMARY
+
           feature_commits=(${{ env.FEATURE_COMMITS }})
           picked_commits=(${{ env.PICKED_COMMITS }})
 
