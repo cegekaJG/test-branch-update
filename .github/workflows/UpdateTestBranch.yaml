@@ -263,7 +263,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ env.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
         with:
           script: |
             (async () => {
@@ -317,29 +317,29 @@ jobs:
 
       - name: Comment on test PR (on failure)
         if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.setup.outputs.disable_comments == 'false'
+        uses: peter-evans/create-or-update-comment@v4
         env:
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ env.notice_comment_tag }}
           MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
-        run: |
-          body="**Automatic ${TEST_BRANCH} update failed.**
+          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
+        with:
+          issue-number: ${{ steps.create_pr.outputs.test_pr_number }}
+          body: |
+            ${{ env.NOTICE_COMMENT_TAG }}
+            **Automatic ${{ env.TEST_BRANCH }} update failed.**
 
-          To manually resolve the merge conflicts, please follow these steps:
+            To manually resolve the merge conflicts, please follow these steps:
 
-          1) Checkout the latest version of the branch \`${FEATURE_TEST_BRANCH}\` with the following commands:
-          \`\`\`bash
-          git fetch origin ${FEATURE_TEST_BRANCH}
-          git checkout ${FEATURE_TEST_BRANCH}
-          git reset --hard origin/${FEATURE_TEST_BRANCH}
-          git cherry-pick -x ${MISSING_COMMITS}
-          \`\`\`
-          2) Manually cherry-pick the failing commits and resolve any conflicts.
-          3) Push the changes and set the PR to ready for review."
-
-          gh pr comment "${TEST_PR_URL}" --body "${NOTICE_COMMENT_TAG}
-          ${body}"
+            1) Checkout the latest version of the branch `${{ env.FEATURE_TEST_BRANCH }}` with the following commands:
+            ```bash
+            git fetch origin ${{ env.FEATURE_TEST_BRANCH }}
+            git checkout ${{ env.FEATURE_TEST_BRANCH }}
+            git reset --hard origin/${{ env.FEATURE_TEST_BRANCH }}
+            git cherry-pick -x ${{ env.MISSING_COMMITS }}
+            ```
+            2) Manually cherry-pick the failing commits and resolve any conflicts.
+            3) Push the changes and set the PR to ready for review.
 
       - name: Update progress comment with final result
         if: needs.setup.outputs.disable_comments == 'false'
