@@ -35,12 +35,17 @@ jobs:
       pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       AUTOMERGE: ${{ steps.set_config.outputs.AUTOMERGE }}
+      progress_comment_id: ${{ steps.create_progress_comment.outputs.comment-id }}
     steps:
-      - name: Add reaction to comment
+      - name: Create progress comment
+        id: create_progress_comment
         uses: peter-evans/create-or-update-comment@v4
         with:
-          comment-id: ${{ github.event.comment.id }}
-          reactions: rocket
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            🚀 Update test branch workflow started.
+            
+            [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -149,21 +154,24 @@ jobs:
       base_branch: ${{ needs.setup.outputs.base_branch }}
       feature_test_prefix: ${{ needs.setup.outputs.feature_test_prefix }}
 
-  add_reaction:
-    name: Add Reaction
+  update_progress_comment:
+    name: Update Progress Comment
     needs: [setup, call_core_workflow]
     runs-on: ubuntu-latest
     if: always() && github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
     steps:
-      - name: Add reaction based on outcome
+      - name: Update comment with outcome
         uses: peter-evans/create-or-update-comment@v4
         with:
-          comment-id: ${{ github.event.comment.id }}
-          reactions: ${{ needs.call_core_workflow.result != 'success' && 'confused' || needs.call_core_workflow.outputs.no_changes == 'true' && 'eyes' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '+1' || '-1') }}
+          comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          body: |
+            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '👀 No new changes found to cherry-pick.' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully!' || '❌ Cherry-pick failed due to conflicts.') }}
+            
+            [View workflow run](${{ needs.setup.outputs.RUN_URL }})
 
   update_prs:
     name: Update Pull Requests
-    needs: [setup, call_core_workflow]
+    needs: [setup, call_core_workflow, update_progress_comment]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -336,58 +344,51 @@ jobs:
           gh pr comment "${TEST_PR_URL}" --body "${NOTICE_COMMENT_TAG}
           ${body}"
 
-      - name: Comment on original PR
+      - name: Update progress comment with final result
         if: needs.setup.outputs.disable_comments == 'false'
+        uses: peter-evans/create-or-update-comment@v4
         env:
           FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
           NO_CHANGES: ${{ needs.call_core_workflow.outputs.no_changes }}
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
-          FEATURE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          if [ "${NO_CHANGES}" == "true" ]; then
-            body="No new changes were found in \`${FEATURE_BRANCH}\` to update the \`${TEST_BRANCH}\` branch.
+        with:
+          comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          body: |
+            ${{ env.NO_CHANGES == 'true' && format('👀 No new changes found to cherry-pick.
 
-            [View workflow run](${RUN_URL})"
-          elif [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
-            body="The cherry-picked changes from \`${FEATURE_BRANCH}\` are ready to be added to the \`${TEST_BRANCH}\` branch.
+            No new changes were found in `{0}` to update the `{1}` branch.
 
-            A new pull request has been created to test the changes. See ${TEST_PR_URL} for more details.
+            [View workflow run]({2})', env.FEATURE_BRANCH, env.TEST_BRANCH, env.RUN_URL) || env.CHERRY_PICK_SUCCESS == 'true' && format('✅ Cherry-pick completed successfully!
 
-            [View workflow run](${RUN_URL})"
-          else
-            body="Unable to cherry-pick the changes from \`${FEATURE_BRANCH}\` to the \`${TEST_BRANCH}\` branch.
+            The cherry-picked changes from `{0}` are ready to be added to the `{1}` branch.
 
-            A new pull request has been created to manually resolve the merge conflicts and test the changes. See ${TEST_PR_URL} for more details.
+            A new pull request has been created to test the changes. See {2} for more details.
 
-            [View workflow run](${RUN_URL})"
-          fi
-          gh pr comment ${FEATURE_NUMBER} --body "${NOTICE_COMMENT_TAG}
-          ${body}"
+            [View workflow run]({3})', env.FEATURE_BRANCH, env.TEST_BRANCH, env.TEST_PR_URL, env.RUN_URL) || format('❌ Cherry-pick failed due to conflicts.
+
+            Unable to cherry-pick the changes from `{0}` to the `{1}` branch.
+
+            A new pull request has been created to manually resolve the merge conflicts and test the changes. See {2} for more details.
+
+            [View workflow run]({3})', env.FEATURE_BRANCH, env.TEST_BRANCH, env.TEST_PR_URL, env.RUN_URL) }}
 
   comment_error:
-    name: Comment on test PR (Error only)
+    name: Update Progress Comment on Error
     needs: [setup, call_core_workflow, update_prs]
     runs-on: ubuntu-latest
     if: failure() && needs.setup.outputs.disable_comments == 'false'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 'Setup jq'
-        uses: dcarbone/install-jq-action@v3
-
-      - name: Comment on original PR
+      - name: Update progress comment with error
+        uses: peter-evans/create-or-update-comment@v4
         env:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
-          FEATURE_NUMBER: ${{ github.event.issue.number }}
-          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag || env.NOTICE_COMMENT_TAG }}
-        run: |
-          body="An error occurred while updating the test branch. Please check the workflow run for details:
-          [View workflow run](${RUN_URL})"
-
-          gh pr comment ${FEATURE_NUMBER} --body "${NOTICE_COMMENT_TAG}
-          ${body}"
+        with:
+          comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          body: |
+            ❌ An error occurred while updating the test branch.
+            
+            Please check the workflow run for details:
+            [View workflow run](${{ env.RUN_URL }})
