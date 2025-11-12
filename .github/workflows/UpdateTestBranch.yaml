@@ -31,7 +31,6 @@ jobs:
       feature_test_prefix: ${{ steps.set_config.outputs.FEATURE_TEST_PREFIX }}
       bot_label: ${{ steps.set_config.outputs.BOT_LABEL }}
       disable_comments: ${{ steps.set_config.outputs.DISABLE_COMMENTS }}
-      notice_comment_tag: ${{ steps.set_config.outputs.NOTICE_COMMENT_TAG }}
       pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       AUTOMERGE: ${{ steps.set_config.outputs.AUTOMERGE }}
@@ -105,7 +104,6 @@ jobs:
           UPDATETESTBRANCH_FEATURE_TEST_PREFIX: ${{ vars.UPDATETESTBRANCH_FEATURE_TEST_PREFIX || env.FEATURE_TEST_PREFIX }}
           UPDATETESTBRANCH_BOT_LABEL: ${{ vars.UPDATETESTBRANCH_BOT_LABEL || env.BOT_LABEL }}
           UPDATETESTBRANCH_DISABLE_COMMENTS: ${{ vars.UPDATETESTBRANCH_DISABLE_COMMENTS || env.DISABLE_COMMENTS }}
-          UPDATETESTBRANCH_NOTICE_COMMENT_TAG: ${{ vars.UPDATETESTBRANCH_NOTICE_COMMENT_TAG || env.NOTICE_COMMENT_TAG }}
           UPDATETESTBRANCH_AUTOMERGE: ${{ vars.UPDATETESTBRANCH_AUTOMERGE || env.AUTOMERGE }}
         run: |
           # Sanitize inputs to prevent code injection
@@ -113,7 +111,6 @@ jobs:
           printf 'FEATURE_TEST_PREFIX=%s\n' "$UPDATETESTBRANCH_FEATURE_TEST_PREFIX" >> $GITHUB_OUTPUT
           printf 'BOT_LABEL=%s\n' "$UPDATETESTBRANCH_BOT_LABEL" >> $GITHUB_OUTPUT
           printf 'DISABLE_COMMENTS=%s\n' "$UPDATETESTBRANCH_DISABLE_COMMENTS" >> $GITHUB_OUTPUT
-          printf 'NOTICE_COMMENT_TAG=%s\n' "$UPDATETESTBRANCH_NOTICE_COMMENT_TAG" >> $GITHUB_OUTPUT
           printf 'AUTOMERGE=%s\n' "$UPDATETESTBRANCH_AUTOMERGE" >> $GITHUB_OUTPUT
 
       - name: Look for existing update PR
@@ -165,7 +162,7 @@ jobs:
         with:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           body: |
-            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '👀 No new changes found to cherry-pick.' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully!' || '❌ Cherry-pick failed due to conflicts.') }}
+            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick.' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully!' || '❌ Cherry-pick failed due to conflicts.') }}
             
             [View workflow run](${{ needs.setup.outputs.RUN_URL }})
 
@@ -266,7 +263,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ env.notice_comment_tag }}
         with:
           script: |
             (async () => {
@@ -324,7 +321,7 @@ jobs:
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ env.notice_comment_tag }}
           MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
         run: |
           body="**Automatic ${TEST_BRANCH} update failed.**
@@ -357,7 +354,7 @@ jobs:
         with:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           body: |
-            ${{ env.NO_CHANGES == 'true' && format('👀 No new changes found to cherry-pick.
+            ${{ env.NO_CHANGES == 'true' && format('✅ No new changes found to cherry-pick.
 
             No new changes were found in `{0}` to update the `{1}` branch.
 
