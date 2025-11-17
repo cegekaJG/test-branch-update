@@ -157,7 +157,7 @@ jobs:
           git fetch origin "${BASE_BRANCH_INPUT}"
           git fetch origin "${FEATURE_BRANCH_INPUT}"
 
-          feature_commits=$(git log --reverse --no-merges --pretty=format:%H "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
+          feature_commits=$(git log --reverse --no-merges --pretty=format:%h "origin/${BASE_BRANCH_INPUT}..origin/${FEATURE_BRANCH_INPUT}")
 
           if [ -z "$feature_commits" ]; then
             echo "SKIP_ALL=true" >> $GITHUB_ENV
@@ -265,8 +265,7 @@ jobs:
           echo "Cherry-picked commits:"
           for commit in "${picked_commits[@]}"; do
             commit_message=$(git log --format=%s -n 1 $commit)
-            echo "$(git log --pretty=format:"- %s (%H)" -n 1 $commit)"
-            echo "::debug::$commit"
+            echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)"
           done
 
           {
