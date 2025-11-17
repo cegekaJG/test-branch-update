@@ -190,7 +190,7 @@ jobs:
           EOF
           )
             if [ -n "$mentions" ]; then
-              comment_body="${mentions}\n\n${comment_body}"
+              comment_body="${mentions}"$'\n\n'"${comment_body}"
             fi
 
             # Post comment to PR
