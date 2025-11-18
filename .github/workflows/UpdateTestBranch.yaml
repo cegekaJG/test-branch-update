@@ -43,7 +43,7 @@ jobs:
           issue-number: ${{ github.event.issue.number }}
           body: |
             🚀 Update test branch workflow started.
-            
+
             [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Checkout repository
@@ -68,6 +68,8 @@ jobs:
           EOF
             exit 1
           else
+            # Make the get-gh-token script executable
+            chmod +x .github/scripts/get-gh-token.sh
             # Use the get-gh-token script to handle both PAT and GitHub App credentials
             GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
             echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
@@ -161,9 +163,10 @@ jobs:
         uses: peter-evans/create-or-update-comment@v4
         with:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          edit-mode: replace
           body: |
             ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick.' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully!' || '❌ Cherry-pick failed due to conflicts.') }}
-            
+
             [View workflow run](${{ needs.setup.outputs.RUN_URL }})
 
   update_prs:
@@ -205,7 +208,7 @@ jobs:
             if [ -n "${ASSIGNEES}" ]; then
               ASSIGNEE_PARAM="--assignee ${ASSIGNEES}"
             fi
-            
+
             TEST_PR_URL=$(gh pr create \
               --base "${TEST_BRANCH}" \
               --head "${FEATURE_TEST_BRANCH}" \
@@ -221,7 +224,7 @@ jobs:
             if [ -n "${ASSIGNEES}" ]; then
               ASSIGNEE_PARAM="--add-assignee ${ASSIGNEES}"
             fi
-            
+
             TEST_PR_URL=$(gh pr edit "${FEATURE_TEST_BRANCH}" \
               --title "${feature_test_title}" \
               --body "${body}" \
@@ -353,6 +356,7 @@ jobs:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
         with:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          edit-mode: replace
           body: |
             ${{ env.NO_CHANGES == 'true' && format('✅ No new changes found to cherry-pick.
 
@@ -384,8 +388,9 @@ jobs:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
         with:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          edit-mode: replace
           body: |
             ❌ An error occurred while updating the test branch.
-            
+
             Please check the workflow run for details:
             [View workflow run](${{ env.RUN_URL }})
