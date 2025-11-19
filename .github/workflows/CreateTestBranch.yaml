@@ -37,12 +37,6 @@ jobs:
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
 
-      - name: 'Set file permissions'
-        run: |
-          chmod +x .github/scripts/get-jwt.sh
-          chmod +x .github/scripts/get-gh-token.sh
-          chmod +x .github/scripts/setup-git-identity.sh
-
       - name: 'Check for GitHub App JWT'
         id: get_app_jwt
         env:
