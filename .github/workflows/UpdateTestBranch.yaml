@@ -193,7 +193,7 @@ jobs:
         if: needs.setup.outputs.progress_comment_id == ''
         with:
           body: |
-            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error. Finishing workflow...' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
+            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
 
             [View workflow run](${{ needs.setup.outputs.RUN_URL }})
 
@@ -204,7 +204,7 @@ jobs:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
-            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error. Finishing workflow...' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
+            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
 
             [View workflow run](${{ needs.setup.outputs.RUN_URL }})
 
