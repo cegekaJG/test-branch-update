@@ -93,14 +93,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BOT_LABEL: ${{ steps.sanitize.outputs.bot_label }}
         run: |
-          if [ -z "$(gh label list --search "${BOT_LABEL}" --limit 1)" ]; then
-            gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"
-            echo "::notice::Label ${BOT_LABEL} created"
+          if [ -z "$(gh label list --json "id,name" --jq '.[] | select(.name == "'"${BOT_LABEL}"'")')" ]; then
+            if ! gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"; then
+              echo "::error::Failed to create label ${BOT_LABEL}. No label will be applied to the test PR. You can create it manually by going to the Labels section of the repository settings."
+              BOT_LABEL=""
+            else
+              echo "::notice::Label '${BOT_LABEL}' created"
+            fi
           else
             echo "Label ${BOT_LABEL} already exists"
           fi
 
-      - name: Archive and recreate test branch
+      - name: Archive existing test branch
         if: steps.check_branch.outputs.test_branch_exists == 'true'
         env:
           BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}

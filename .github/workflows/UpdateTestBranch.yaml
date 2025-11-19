@@ -134,13 +134,18 @@ jobs:
 
       - name: Ensure bot label exists
         env:
-          BOT_LABEL: ${{ steps.set_config.outputs.BOT_LABEL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOT_LABEL: ${{ steps.set_config.outputs.bot_label }}
         run: |
-          if [ -z "$(gh label list --search "${BOT_LABEL}" --limit 1)" ]; then
-            gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"
-            echo "::notice::Label ${BOT_LABEL} added to repository."
+          if [ -z "$(gh label list --json "id,name" --jq '.[] | select(.name == "'"${BOT_LABEL}"'")')" ]; then
+            if ! gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"; then
+              echo "::error::Failed to create label ${BOT_LABEL}. No label will be applied to the test PR. You can create it manually by going to the Labels section of the repository settings."
+              BOT_LABEL=""
+            else
+              echo "::notice::Label '${BOT_LABEL}' created"
+            fi
           else
-            echo "Label ${BOT_LABEL} found."
+            echo "Label ${BOT_LABEL} already exists"
           fi
 
   call_core_workflow:
@@ -165,7 +170,7 @@ jobs:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
-            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick.' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully!' || '❌ Cherry-pick failed due to conflicts.') }}
+            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error. Finishing workflow...' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
 
             [View workflow run](${{ needs.setup.outputs.RUN_URL }})
 
@@ -266,7 +271,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
-          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ env.NOTICE_COMMENT_TAG }}
         with:
           script: |
             (async () => {
@@ -325,7 +330,7 @@ jobs:
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
-          NOTICE_COMMENT_TAG: ${{ needs.setup.outputs.notice_comment_tag }}
+          NOTICE_COMMENT_TAG: ${{ env.NOTICE_COMMENT_TAG }}
         with:
           issue-number: ${{ steps.create_pr.outputs.test_pr_number }}
           body: |
