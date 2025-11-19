@@ -40,11 +40,18 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
         -H "Accept: application/vnd.github+json" \
         "https://api.github.com/app")
     
+    # Validate that we got valid JSON response
+    if ! echo "$APP_INFO" | jq -e . >/dev/null 2>&1; then
+        echo "Error: Failed to get valid response from GitHub API" >&2
+        echo "Response: $APP_INFO" >&2
+        exit 1
+    fi
+    
     APP_SLUG=$(echo "$APP_INFO" | jq -r '.slug // empty')
     APP_NAME=$(echo "$APP_INFO" | jq -r '.name // empty')
     
     if [ -z "$APP_SLUG" ]; then
-        echo "Error: Could not retrieve GitHub App information" >&2
+        echo "Error: Could not retrieve GitHub App information from API response" >&2
         exit 1
     fi
     
