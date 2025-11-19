@@ -175,8 +175,19 @@ jobs:
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
 
-      - name: Update comment with outcome
+      - name: Add comment with outcome
         uses: peter-evans/create-or-update-comment@v4
+        if: needs.setup.outputs.progress_comment_id == ''
+        with:
+          token: ${{ env.GH_TOKEN }}
+          body: |
+            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error. Finishing workflow...' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
+
+            [View workflow run](${{ needs.setup.outputs.RUN_URL }})
+
+      - name: Update progress comment with outcome
+        uses: peter-evans/create-or-update-comment@v4
+        if: needs.setup.outputs.progress_comment_id != ''
         with:
           token: ${{ env.GH_TOKEN }}
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
@@ -450,8 +461,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Add comment with error
+        uses: peter-evans/create-or-update-comment@v4
+        if: needs.setup.outputs.progress_comment_id == ''
+        env:
+          RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
+        with:
+          token: ${{ env.GH_TOKEN }}
+          body: |
+            ❌ An error occurred while updating the test branch.
+
+            Please check the workflow run for details:
+            [View workflow run](${{ env.RUN_URL }})
+
       - name: Update progress comment with error
         uses: peter-evans/create-or-update-comment@v4
+        if: needs.setup.outputs.progress_comment_id != ''
         env:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
         with:
