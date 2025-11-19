@@ -198,6 +198,25 @@ jobs:
             echo "Feature test branch ${FEATURE_TEST_BRANCH} does not exist remotely."
           fi
 
+      - name: Get feature PR URL
+        id: get_feature_pr_url
+        env:
+          FALLBACK_URL: https://github.com/${{ github.repository }}/pull/${{ github.event.issue.number }}
+        run: |
+          pr_info=$(gh pr view ${{ github.event.issue.number }} --json url)
+
+          printf "::debug::PR info: %q\n" "$pr_info"
+
+          if [ -z "$pr_info" ]; then
+            echo "::notice::Failed to get PR information. Using fallback URL."
+            pr_url="$FALLBACK_URL"
+          else
+            pr_url=$(echo "$pr_info" | jq -r '.url')
+          fi
+
+          echo "PR URL: $pr_url"
+          echo "FEATURE_PR_URL=$pr_url" >> $GITHUB_OUTPUT
+
       - name: Create/Update test pull request
         id: create_pr
         if: needs.setup.outputs.pr_exists == 'true' || needs.call_core_workflow.outputs.no_changes == 'false' || (needs.setup.outputs.pr_exists == 'false' && steps.check_branch.outputs.branch_exists == 'true')
@@ -209,7 +228,7 @@ jobs:
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           PR_EXISTS: ${{ needs.setup.outputs.pr_exists }}
           FEATURE_TITLE: ${{ github.event.issue.title }}
-          FEATURE_PR_URL: ${{ github.event.issue.url }}
+          FEATURE_PR_URL: ${{ steps.get_feature_pr_url.outputs.FEATURE_PR_URL }}
           ASSIGNEES_JSON: ${{ toJSON(github.event.issue.assignees) }}
         run: |
           feature_test_title="${FEATURE_TITLE} - Test"
