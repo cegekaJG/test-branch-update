@@ -25,13 +25,14 @@ configure_github_actions_bot_identity() {
 }
 
 if [ -z "$TOKEN_INPUT" ]; then
+    echo "::debug::No token input provided, using default GitHub Actions bot identity" >&2
     configure_github_actions_bot_identity
     exit 0
 fi
 
 # Check if required tools are available
 if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed" >&2
+    echo "::error::jq is required but not installed" >&2
     exit 1
 fi
 
@@ -42,7 +43,7 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     # Get the GitHub App slug (username)
     # We need to use the GH_TOKEN that should be set in the environment
     if [ -z "$GH_TOKEN" ]; then
-        echo "Error: GH_TOKEN environment variable not set" >&2
+        echo "::error::GH_TOKEN environment variable not set" >&2
         exit 1
     fi
 
@@ -51,9 +52,18 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
         -H "Accept: application/vnd.github+json" \
         "https://api.github.com/app")
 
+    if [ "$HTTP_CODE" -ne 200 ]; then
+        echo "::error::Failed to get GitHub App information (HTTP ${HTTP_CODE})" >&2
+        echo "::debug:: Response: $HTTP_CODE" >&2
+        # Only log error message, not full response to avoid exposing sensitive data
+        ERROR_MSG=$(echo "$INSTALLATION_RESPONSE" | jq -r '.message // "Unknown error"' 2>/dev/null || echo "Unknown error")
+        echo "Error message: $ERROR_MSG" >&2
+        exit 1
+    fi
+
     # Validate that we got valid JSON response
     if ! echo "$APP_INFO" | jq -e . >/dev/null 2>&1; then
-        echo "Error: Failed to get valid response from GitHub API" >&2
+        echo "::error::Failed to get valid response from GitHub API" >&2
         echo "Response: $APP_INFO" >&2
         exit 1
     fi
@@ -62,7 +72,7 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     APP_NAME=$(echo "$APP_INFO" | jq -r '.name // empty')
 
     if [ -z "$APP_SLUG" ]; then
-        echo "Error: Could not retrieve GitHub App information from API response" >&2
+        echo "::error::Could not retrieve GitHub App information from API response" >&2
         exit 1
     fi
 
@@ -78,5 +88,6 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     echo "  Name: $GIT_USER_NAME" >&2
     echo "  Email: $GIT_USER_EMAIL" >&2
 else
+    echo "::debug::Input is not a JSON object, using GitHub Actions bot identity" >&2
     configure_github_actions_bot_identity
 fi

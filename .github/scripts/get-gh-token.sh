@@ -14,23 +14,23 @@ set -e
 TOKEN_INPUT="$1"
 
 if [ -z "$TOKEN_INPUT" ]; then
-    echo "Error: No token or credentials provided" >&2
+    echo "::error::No token or credentials provided" >&2
     exit 1
 fi
 
 # Check if required tools are available
 if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed" >&2
+    echo "::error::jq is required but not installed" >&2
     exit 1
 fi
 
 if ! command -v openssl &> /dev/null; then
-    echo "Error: openssl is required but not installed" >&2
+    echo "::error::openssl is required but not installed" >&2
     exit 1
 fi
 
 if ! command -v curl &> /dev/null; then
-    echo "Error: curl is required but not installed" >&2
+    echo "::error::curl is required but not installed" >&2
     exit 1
 fi
 
@@ -53,11 +53,12 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     PRIVATE_KEY=$(echo "$TOKEN_INPUT" | jq -r '.PrivateKey // empty')
 
     if [ -z "$CLIENT_ID" ] || [ -z "$PRIVATE_KEY" ]; then
-        echo "Error: Invalid GitHub App credentials. Missing GitHubAppClientId or PrivateKey" >&2
+        echo "::error::Invalid GitHub App credentials. Missing GitHubAppClientId or PrivateKey" >&2
         exit 1
     fi
 
     # Generate JWT for GitHub App authentication
+    echo "::debug::Generating JWT for GitHub App authentication" >&2
     # JWT header
     JWT_HEADER=$(echo -n '{"alg":"RS256","typ":"JWT"}' | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
@@ -76,7 +77,7 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     chmod 600 "$TEMP_KEY"
     # Ensure private key has proper PEM formatting
     if ! echo "$PRIVATE_KEY" | grep -q "BEGIN RSA PRIVATE KEY"; then
-        echo "Error: PrivateKey is not in PEM format" >&2
+        echo "::error::PrivateKey is not in PEM format" >&2
         exit 1
     fi
     # Fix line breaks if needed
@@ -97,17 +98,20 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
 
     # Complete JWT
     JWT="${JWT_UNSIGNED}.${JWT_SIGNATURE}"
+    echo "::debug::Generated JWT for GitHub App" >&2
 
     # Get the installation ID for this repository
+    echo "::debug::Retrieving installation ID for the repository" >&2
     # First, we need to find the installation
     REPO_FULL_NAME="${GITHUB_REPOSITORY}"
 
     if [ -z "$REPO_FULL_NAME" ]; then
-        echo "Error: GITHUB_REPOSITORY environment variable not set" >&2
+        echo "::error::GITHUB_REPOSITORY environment variable not set" >&2
         exit 1
     fi
 
     # Get installation ID with error handling
+    echo "::debug::Sending request to ${REPO_FULL_NAME} installation endpoint" >&2
     HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
         -H "Authorization: Bearer ${JWT}" \
         -H "Accept: application/vnd.github+json" \
@@ -117,8 +121,8 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     INSTALLATION_RESPONSE=$(echo "$HTTP_RESPONSE" | sed '$d')
 
     if [ "$HTTP_CODE" -ne 200 ]; then
-        echo "Error: Failed to get installation ID (HTTP ${HTTP_CODE})" >&2
-        echo "::debug:: Response: $INSTALLATION_RESPONSE" >&2
+        echo "::error::Failed to get installation ID (HTTP ${HTTP_CODE})" >&2
+        echo "::debug:: Response: $HTTP_CODE" >&2
         # Only log error message, not full response to avoid exposing sensitive data
         ERROR_MSG=$(echo "$INSTALLATION_RESPONSE" | jq -r '.message // "Unknown error"' 2>/dev/null || echo "Unknown error")
         echo "Error message: $ERROR_MSG" >&2
@@ -128,11 +132,15 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     INSTALLATION_ID=$(echo "$INSTALLATION_RESPONSE" | jq -r '.id // empty')
 
     if [ -z "$INSTALLATION_ID" ]; then
-        echo "Error: Could not get installation ID for repository ${REPO_FULL_NAME}" >&2
+        echo "::error::Could not get installation ID for repository ${REPO_FULL_NAME}" >&2
         exit 1
     fi
 
+    echo "::debug::Retrieved installation ID: ${INSTALLATION_ID}" >&2
+
     # Generate installation access token with error handling
+    echo "::debug::Generating installation access token" >&2
+    echo "::debug::Sending request to create access token for installation ID ${INSTALLATION_ID}" >&2
     HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer ${JWT}" \
         -H "Accept: application/vnd.github+json" \
@@ -142,17 +150,17 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
     TOKEN_RESPONSE=$(echo "$HTTP_RESPONSE" | sed '$d')
 
     if [ "$HTTP_CODE" -ne 201 ]; then
-        echo "Error: Failed to generate installation token (HTTP ${HTTP_CODE})" >&2
         # Only log error message, not full response to avoid exposing sensitive data
         ERROR_MSG=$(echo "$TOKEN_RESPONSE" | jq -r '.message // "Unknown error"' 2>/dev/null || echo "Unknown error")
-        echo "Error message: $ERROR_MSG" >&2
+        echo "::error::Failed to generate installation token (HTTP ${HTTP_CODE})\nError message:\n${ERROR_MSG}" >&2
+        echo "::debug:: Response: $HTTP_CODE" >&2
         exit 1
     fi
 
     INSTALLATION_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
 
     if [ -z "$INSTALLATION_TOKEN" ]; then
-        echo "Error: Could not generate installation token" >&2
+        echo "::error::Could not generate installation token" >&2
         exit 1
     fi
 
