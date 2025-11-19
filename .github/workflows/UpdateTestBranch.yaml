@@ -72,7 +72,7 @@ jobs:
             exit 1
           else
             TOKEN_JWT_VALUE=$(.github/scripts/get-jwt.sh "$CUSTOM_TOKEN")
-            echo "TOKEN_JWT=$TOKEN_JWT_VALUE" >> $GITHUB_ENV
+            echo "TOKEN_JWT=$TOKEN_JWT_VALUE" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup GH_TOKEN
@@ -221,7 +221,8 @@ jobs:
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
 
-      - name: Setup GH_TOKEN
+      - name: 'Check for GitHub App JWT'
+        id: get_app_jwt
         env:
           CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
         run: |
@@ -235,12 +236,24 @@ jobs:
           EOF
             exit 1
           else
-            # Make the get-gh-token script executable
-            chmod +x .github/scripts/get-gh-token.sh
-            # Use the get-gh-token script to handle both PAT and GitHub App credentials
-            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
-            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
+            TOKEN_JWT_VALUE=$(.github/scripts/get-jwt.sh "$CUSTOM_TOKEN")
+            echo "TOKEN_JWT=$TOKEN_JWT_VALUE" >> $GITHUB_OUTPUT
           fi
+
+      - name: Setup GH_TOKEN
+        env:
+          TOKEN_JWT: ${{ steps.get_app_jwt.outputs.TOKEN_JWT }}
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+        run: |
+          if [ -n "$TOKEN_JWT" ]; then
+            echo "Using GitHub App JWT for authentication"
+            TOKEN_VALUE=$TOKEN_JWT
+          else
+            echo "Using Personal Access Token for authentication"
+            TOKEN_VALUE=$CUSTOM_TOKEN
+          fi
+          GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$TOKEN_VALUE")
+          echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
 
       - name: Check if feature test branch exists
         id: check_branch
