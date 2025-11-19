@@ -37,6 +37,12 @@ jobs:
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
 
+      - name: 'Set file permissions'
+        run: |
+          chmod +x .github/scripts/get-jwt.sh
+          chmod +x .github/scripts/get-gh-token.sh
+          chmod +x .github/scripts/setup-git-identity.sh
+
       - name: 'Check for GitHub App JWT'
         id: get_app_jwt
         env:
@@ -81,6 +87,10 @@ jobs:
             git config --global user.name "github-actions[bot]"
             git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           fi
+
+      - name: 'Revert changes from setting permissions'
+        run: |
+          git checkout -- .github/scripts/
 
       - name: Sanitize inputs
         id: sanitize
