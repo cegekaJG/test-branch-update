@@ -188,6 +188,8 @@ jobs:
     name: Notify Open PRs
     needs: setup_test_branch
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     if: needs.setup_test_branch.outputs.test_branch_existed == 'true'
     steps:
       - name: Checkout repository

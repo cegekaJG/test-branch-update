@@ -183,6 +183,8 @@ jobs:
     name: Update Progress Comment
     needs: [setup, call_core_workflow]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     if: always() && github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
     steps:
       - name: Checkout repository
@@ -487,6 +489,8 @@ jobs:
     needs: [setup, call_core_workflow, update_prs]
     runs-on: ubuntu-latest
     if: failure() && needs.setup.outputs.disable_comments == 'false'
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
