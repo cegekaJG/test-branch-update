@@ -40,6 +40,7 @@ jobs:
         id: create_progress_comment
         uses: peter-evans/create-or-update-comment@v4
         with:
+          token: ${{ env.GH_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body: |
             🚀 Update test branch workflow started.
@@ -164,9 +165,37 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+
+      - name: Setup GH_TOKEN
+        env:
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+        run: |
+          if [ -z "$CUSTOM_TOKEN" ]; then
+            echo "::error::The UPDATETESTTOKEN secret is required."
+            cat << 'EOF'
+          ::error:: ## ⚠️ UPDATETESTTOKEN Secret Not Found
+
+          The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
+          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/UpdateTestToken.md
+          EOF
+            exit 1
+          else
+            # Make the get-gh-token script executable
+            chmod +x .github/scripts/get-gh-token.sh
+            # Use the get-gh-token script to handle both PAT and GitHub App credentials
+            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
+            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
+          fi
+
       - name: Update comment with outcome
         uses: peter-evans/create-or-update-comment@v4
         with:
+          token: ${{ env.GH_TOKEN }}
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
@@ -184,6 +213,27 @@ jobs:
 
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
+
+      - name: Setup GH_TOKEN
+        env:
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+        run: |
+          if [ -z "$CUSTOM_TOKEN" ]; then
+            echo "::error::The UPDATETESTTOKEN secret is required."
+            cat << 'EOF'
+          ::error:: ## ⚠️ UPDATETESTTOKEN Secret Not Found
+
+          The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
+          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/UpdateTestToken.md
+          EOF
+            exit 1
+          else
+            # Make the get-gh-token script executable
+            chmod +x .github/scripts/get-gh-token.sh
+            # Use the get-gh-token script to handle both PAT and GitHub App credentials
+            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
+            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
+          fi
 
       - name: Get feature PR URL
         id: get_feature_pr_url
@@ -355,6 +405,7 @@ jobs:
           MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
           NOTICE_COMMENT_TAG: ${{ env.NOTICE_COMMENT_TAG }}
         with:
+          token: ${{ env.GH_TOKEN }}
           issue-number: ${{ steps.create_pr.outputs.test_pr_number }}
           body: |
             ${{ env.NOTICE_COMMENT_TAG }}
@@ -383,6 +434,7 @@ jobs:
           NO_CHANGES: ${{ needs.call_core_workflow.outputs.no_changes }}
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
         with:
+          token: ${{ env.GH_TOKEN }}
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
@@ -410,11 +462,39 @@ jobs:
     runs-on: ubuntu-latest
     if: failure() && needs.setup.outputs.disable_comments == 'false'
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+
+      - name: Setup GH_TOKEN
+        env:
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+        run: |
+          if [ -z "$CUSTOM_TOKEN" ]; then
+            echo "::error::The UPDATETESTTOKEN secret is required."
+            cat << 'EOF'
+          ::error:: ## ⚠️ UPDATETESTTOKEN Secret Not Found
+
+          The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
+          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/UpdateTestToken.md
+          EOF
+            exit 1
+          else
+            # Make the get-gh-token script executable
+            chmod +x .github/scripts/get-gh-token.sh
+            # Use the get-gh-token script to handle both PAT and GitHub App credentials
+            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
+            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
+          fi
+
       - name: Update progress comment with error
         uses: peter-evans/create-or-update-comment@v4
         env:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
         with:
+          token: ${{ env.GH_TOKEN }}
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
