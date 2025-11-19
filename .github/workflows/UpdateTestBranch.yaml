@@ -289,8 +289,8 @@ jobs:
                     repo: context.repo.repo
                   });
                 } catch (error) {
-                  process.stdout.write(`::error::Error retrieving comments from ${newPrNumber}: ${error.message}\n`);
-                  process.exit(1);
+                  process.stdout.write(`::error::Error retrieving comments from new PR #${newPrNumber}: ${error.message}\n`);
+                  newPrComments = [];
                 }
               }
               let oldPrComments = [];
@@ -301,24 +301,28 @@ jobs:
                   repo: context.repo.repo
                 });
               } catch (error) {
-                process.stdout.write(`::error::Error retrieving comments from ${context.issue.number}: ${error.message}\n`);
-                process.exit(1);
+                process.stdout.write(`::error::Error retrieving comments from PR #${context.issue.number}: ${error.message}\n`);
+                oldPrComments = [];
               }
               const allComments = [oldPrComments, newPrComments];
               for (const comments of allComments) {
-                for (const comment of comments.data) {
-                  if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith(NOTICE_COMMENT_TAG)) {
-                    try {
-                      await github.rest.issues.deleteComment({
-                        comment_id: comment.id,
-                        owner: context.repo.owner,
-                        repo: context.repo.repo
-                      });
-                      process.stdout.write(`Deleted comment ${comment.html_url}\n`);
-                    } catch (error) {
-                      process.stdout.write(`::notice::Error deleting comment ${comment.html_url}: ${error.message}\n`);
+                if (comments && Array.isArray(comments.data)) {
+                  for (const comment of comments.data) {
+                    if (comment.user.login === 'github-actions[bot]' && comment.body.startsWith(NOTICE_COMMENT_TAG)) {
+                      try {
+                        await github.rest.issues.deleteComment({
+                          comment_id: comment.id,
+                          owner: context.repo.owner,
+                          repo: context.repo.repo
+                        });
+                        process.stdout.write(`Deleted comment ${comment.html_url}\n`);
+                      } catch (error) {
+                        process.stdout.write(`::notice::Error deleting comment ${comment.html_url}: ${error.message}\n`);
+                      }
                     }
                   }
+                } else {
+                  process.stdout.write(`::debug::Comment data is not iterable.`)
                 }
               }
             })();
