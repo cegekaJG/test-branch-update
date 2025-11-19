@@ -38,6 +38,11 @@ jobs:
       progress_comment_id: ${{ steps.create_progress_comment.outputs.comment-id }}
       GH_TOKEN: ${{ env.GH_TOKEN }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
 
@@ -72,11 +77,6 @@ jobs:
             🚀 Update test branch workflow started.
 
             [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Get PR information
         id: get_pr_info
