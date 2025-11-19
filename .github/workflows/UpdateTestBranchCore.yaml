@@ -103,7 +103,7 @@ jobs:
         run: |
           if [ -z "$CUSTOM_TOKEN" ]; then
             cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-          ⚠️ ## UPDATETESTTOKEN Secret Not Found
+          ## ⚠️ UPDATETESTTOKEN Secret Not Found
 
           The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
           For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
