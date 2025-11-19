@@ -104,7 +104,7 @@ jobs:
           ⚠️ ## UPDATETESTTOKEN Secret Not Found
 
           The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
-          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/UpdateTestToken.md
+          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
           EOF
           else
             # Make the get-gh-token script executable
