@@ -185,9 +185,22 @@ jobs:
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
 
+      - name: Check if feature test branch exists
+        id: check_branch
+        env:
+          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
+        run: |
+          if git ls-remote --heads origin | grep -q "refs/heads/${FEATURE_TEST_BRANCH}$"; then
+            echo "BRANCH_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "Feature test branch ${FEATURE_TEST_BRANCH} exists remotely."
+          else
+            echo "BRANCH_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "Feature test branch ${FEATURE_TEST_BRANCH} does not exist remotely."
+          fi
+
       - name: Create/Update test pull request
         id: create_pr
-        if: needs.setup.outputs.pr_exists == 'true' || needs.call_core_workflow.outputs.no_changes == 'false'
+        if: needs.setup.outputs.pr_exists == 'true' || needs.call_core_workflow.outputs.no_changes == 'false' || (needs.setup.outputs.pr_exists == 'false' && steps.check_branch.outputs.branch_exists == 'true')
         env:
           FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
           BASE_BRANCH: ${{ needs.setup.outputs.base_branch }}
@@ -363,11 +376,18 @@ jobs:
           CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
           NO_CHANGES: ${{ needs.call_core_workflow.outputs.no_changes }}
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
+          TEST_PR_EXISTS: ${{ steps.create_pr.outputs.test_pr_exists }}
         with:
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
-            ${{ env.NO_CHANGES == 'true' && format('✅ No new changes found to cherry-pick.
+            ${{ env.NO_CHANGES == 'true' && env.TEST_PR_EXISTS == 'true' && format('✅ No new changes found to cherry-pick.
+
+            No new changes were found in `{0}` to update the `{1}` branch.
+
+            A pull request has been created or updated for the existing test branch. See {2} for more details.
+
+            [View workflow run]({3})', env.FEATURE_BRANCH, env.TEST_BRANCH, env.TEST_PR_URL, env.RUN_URL) || env.NO_CHANGES == 'true' && format('✅ No new changes found to cherry-pick.
 
             No new changes were found in `{0}` to update the `{1}` branch.
 
