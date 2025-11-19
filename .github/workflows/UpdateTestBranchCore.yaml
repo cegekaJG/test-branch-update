@@ -76,6 +76,8 @@ jobs:
   update_test_branch:
     name: Update Test Branch
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       cherry_pick_success: ${{ env.CHERRY_PICK_FAILED == 'false' }}
       feature_test_branch: ${{ env.FEATURE_TEST_BRANCH }}

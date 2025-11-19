@@ -28,7 +28,6 @@ jobs:
       base_branch: ${{ steps.get_base.outputs.base_branch }}
       test_branch: ${{ steps.get_test_branch.outputs.test_branch }}
       test_branch_existed: ${{ steps.check_branch.outputs.test_branch_exists }}
-      GH_TOKEN: ${{ env.GH_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -167,8 +166,6 @@ jobs:
     needs: setup_test_branch
     runs-on: ubuntu-latest
     if: needs.setup_test_branch.outputs.test_branch_existed == 'true'
-    env:
-      GH_TOKEN: ${{ needs.setup_test_branch.outputs.GH_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

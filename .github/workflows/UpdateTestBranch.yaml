@@ -25,6 +25,7 @@ jobs:
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     outputs:
       test_branch: ${{ steps.set_config.outputs.TEST_BRANCH }}
       feature_branch: ${{ steps.get_pr_info.outputs.HEAD_REF }}
@@ -33,15 +34,24 @@ jobs:
       bot_label: ${{ steps.set_config.outputs.BOT_LABEL }}
       disable_comments: ${{ steps.set_config.outputs.DISABLE_COMMENTS }}
       pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RUN_URL: ${{ env.RUN_URL }}
       AUTOMERGE: ${{ steps.set_config.outputs.AUTOMERGE }}
       progress_comment_id: ${{ steps.create_progress_comment.outputs.comment-id }}
-      GH_TOKEN: ${{ env.GH_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Create progress comment
+        id: create_progress_comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            🚀 Update test branch workflow started.
+
+            [View workflow run](${{ env.RUN_URL }})
 
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
@@ -66,17 +76,6 @@ jobs:
             GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
             echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
           fi
-
-      - name: Create progress comment
-        id: create_progress_comment
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ env.GH_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          body: |
-            🚀 Update test branch workflow started.
-
-            [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Get PR information
         id: get_pr_info
@@ -166,8 +165,6 @@ jobs:
     needs: [setup, call_core_workflow]
     runs-on: ubuntu-latest
     if: always() && github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
-    env:
-      GH_TOKEN: ${{ needs.setup.outputs.GH_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -179,7 +176,6 @@ jobs:
         uses: peter-evans/create-or-update-comment@v4
         if: needs.setup.outputs.progress_comment_id == ''
         with:
-          token: ${{ env.GH_TOKEN }}
           body: |
             ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error. Finishing workflow...' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
 
@@ -189,7 +185,6 @@ jobs:
         uses: peter-evans/create-or-update-comment@v4
         if: needs.setup.outputs.progress_comment_id != ''
         with:
-          token: ${{ env.GH_TOKEN }}
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
@@ -202,13 +197,34 @@ jobs:
     needs: [setup, call_core_workflow, update_progress_comment]
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ needs.setup.outputs.GH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: 'Setup jq'
         uses: dcarbone/install-jq-action@v3
+
+      - name: Setup GH_TOKEN
+        env:
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+        run: |
+          if [ -z "$CUSTOM_TOKEN" ]; then
+            echo "::error::The UPDATETESTTOKEN secret is required."
+            cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## ⚠️ UPDATETESTTOKEN Secret Not Found
+
+          The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
+          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
+          EOF
+            exit 1
+          else
+            # Make the get-gh-token script executable
+            chmod +x .github/scripts/get-gh-token.sh
+            # Use the get-gh-token script to handle both PAT and GitHub App credentials
+            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
+            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
+          fi
 
       - name: Check if feature test branch exists
         id: check_branch
@@ -226,7 +242,7 @@ jobs:
       - name: Get feature PR URL
         id: get_feature_pr_url
         env:
-          FALLBACK_URL: https://github.com/${{ github.repository }}/pull/${{ github.event.issue.number }}
+          FALLBACK_URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ github.event.issue.number }}
         run: |
           pr_info=$(gh pr view ${{ github.event.issue.number }} --json url)
 
@@ -390,9 +406,7 @@ jobs:
           TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
           FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
           MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
-          NOTICE_COMMENT_TAG: ${{ env.NOTICE_COMMENT_TAG }}
         with:
-          token: ${{ env.GH_TOKEN }}
           issue-number: ${{ steps.create_pr.outputs.test_pr_number }}
           body: |
             ${{ env.NOTICE_COMMENT_TAG }}
@@ -422,7 +436,6 @@ jobs:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
           TEST_PR_EXISTS: ${{ steps.create_pr.outputs.test_pr_exists }}
         with:
-          token: ${{ env.GH_TOKEN }}
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
@@ -455,8 +468,6 @@ jobs:
     needs: [setup, call_core_workflow, update_prs]
     runs-on: ubuntu-latest
     if: failure() && needs.setup.outputs.disable_comments == 'false'
-    env:
-      GH_TOKEN: ${{ needs.setup.outputs.GH_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -467,7 +478,6 @@ jobs:
         env:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
         with:
-          token: ${{ env.GH_TOKEN }}
           body: |
             ❌ An error occurred while updating the test branch.
 
@@ -480,7 +490,6 @@ jobs:
         env:
           RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
         with:
-          token: ${{ env.GH_TOKEN }}
           comment-id: ${{ needs.setup.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
