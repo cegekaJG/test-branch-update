@@ -12,7 +12,7 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
       - id: detect-private-key
-        exclude: ^\.github\/scripts\/get-gh-token\.(sh|ps1)$
+        exclude: ^\.github\/scripts\/get-jwt\.(sh|ps1)$
       - id: end-of-file-fixer
         files: ^.+\.(ps1|py|md|txt)$
       - id: trailing-whitespace

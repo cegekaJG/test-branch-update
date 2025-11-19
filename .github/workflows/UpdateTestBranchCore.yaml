@@ -76,8 +76,6 @@ jobs:
   update_test_branch:
     name: Update Test Branch
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       cherry_pick_success: ${{ env.CHERRY_PICK_FAILED == 'false' }}
       feature_test_branch: ${{ env.FEATURE_TEST_BRANCH }}
@@ -96,8 +94,13 @@ jobs:
         if: ${{ env.SKIP_ALL == 'false' }}
         uses: dcarbone/install-jq-action@v3
 
-      - name: Setup GH_TOKEN
-        if: ${{ env.SKIP_ALL == 'false' }}
+      - name: 'Set file permissions'
+        run: |
+          chmod +x .github/scripts/get-jwt.sh
+          chmod +x .github/scripts/setup-git-identity.sh
+
+      - name: 'Check for GitHub App JWT'
+        id: get_app_jwt
         env:
           CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
         run: |
@@ -109,22 +112,22 @@ jobs:
           For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
           EOF
           else
-            # Make the get-gh-token script executable
-            chmod +x .github/scripts/get-gh-token.sh
-            # Use the get-gh-token script to handle both PAT and GitHub App credentials
-            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
-            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
+            TOKEN_JWT_VALUE=$(.github/scripts/get-jwt.sh "$CUSTOM_TOKEN")
+            echo "TOKEN_JWT=$TOKEN_JWT_VALUE" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up Git
-        if: ${{ env.SKIP_ALL == 'false' }}
         env:
-          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+          TOKEN_JWT: ${{ steps.get_app_jwt.outputs.TOKEN_JWT }}
         run: |
-          # Make the setup-git-identity script executable
-          chmod +x .github/scripts/setup-git-identity.sh
-          # Use the setup-git-identity script to configure Git with appropriate identity
-          .github/scripts/setup-git-identity.sh "$CUSTOM_TOKEN"
+          if [ -n "$TOKEN_JWT" ]; then
+            echo "Using GitHub App JWT for Git identity"
+            .github/scripts/setup-git-identity.sh "$TOKEN_JWT"
+          else
+            echo "Using GitHub Actions bot for Git identity"
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
 
       - name: Set environment variables
         if: ${{ env.SKIP_ALL == 'false' }}
