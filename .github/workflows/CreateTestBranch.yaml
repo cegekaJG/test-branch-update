@@ -27,15 +27,43 @@ jobs:
       test_branch: ${{ steps.get_test_branch.outputs.test_branch }}
       test_branch_existed: ${{ steps.check_branch.outputs.test_branch_exists }}
     steps:
-      - name: Set up Git
-        run: |
-          git config --global user.name github-actions[bot]
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: 'Setup jq'
+        uses: dcarbone/install-jq-action@v3
+
+      - name: Setup GH_TOKEN
+        env:
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+        run: |
+          if [ -z "$CUSTOM_TOKEN" ]; then
+            echo "::error::The UPDATETESTTOKEN secret is required."
+            cat << 'EOF'
+          ::error:: ## ⚠️ UPDATETESTTOKEN Secret Not Found
+
+          The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
+          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/UpdateTestToken.md
+          EOF
+            exit 1
+          else
+            # Make the get-gh-token script executable
+            chmod +x .github/scripts/get-gh-token.sh
+            # Use the get-gh-token script to handle both PAT and GitHub App credentials
+            GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$CUSTOM_TOKEN")
+            echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
+          fi
+
+      - name: Set up Git
+        env:
+          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
+        run: |
+          # Make the setup-git-identity script executable
+          chmod +x .github/scripts/setup-git-identity.sh
+          # Use the setup-git-identity script to configure Git with appropriate identity
+          .github/scripts/setup-git-identity.sh "$CUSTOM_TOKEN"
 
       - name: Sanitize inputs
         id: sanitize
