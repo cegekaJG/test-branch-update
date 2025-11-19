@@ -154,6 +154,7 @@ jobs:
     name: Call Core Update Workflow
     needs: setup
     uses: ./.github/workflows/UpdateTestBranchCore.yaml
+    secrets: inherit
     with:
       test_branch: ${{ needs.setup.outputs.test_branch }}
       feature_branch: ${{ needs.setup.outputs.feature_branch }}
