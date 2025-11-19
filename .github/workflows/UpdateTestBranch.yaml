@@ -61,8 +61,8 @@ jobs:
         run: |
           if [ -z "$CUSTOM_TOKEN" ]; then
             echo "::error::The UPDATETESTTOKEN secret is required."
-            cat << 'EOF'
-          ::error:: ## ⚠️ UPDATETESTTOKEN Secret Not Found
+            cat << 'EOF' >> $STEP_SUMMARY
+          ## ⚠️ UPDATETESTTOKEN Secret Not Found
 
           The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
           For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/UpdateTestToken.md
