@@ -162,7 +162,7 @@ jobs:
           TEST_BRANCH: ${{ steps.get_test_branch.outputs.test_branch }}
         run: |
           # Create archive branch
-          date_suffix=$(date +%Y-%m-%d)
+          date_suffix=$(date +%Y-%m-%d-%H%M%S)
           archive_name="archive/${TEST_BRANCH}/${date_suffix}"
 
           git fetch origin "${TEST_BRANCH}"
