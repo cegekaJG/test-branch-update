@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       base_branch: ${{ steps.get_base.outputs.base_branch }}
-      test_branch: ${{ steps.sanitize.outputs.test_branch }}
+      test_branch: ${{ steps.get_test_branch.outputs.test_branch }}
       test_branch_existed: ${{ steps.check_branch.outputs.test_branch_exists }}
     steps:
       - name: Set up Git
@@ -97,14 +97,14 @@ jobs:
             gh label create "${BOT_LABEL}" --color CCCCCC --description "Automated pull requests"
             echo "::notice::Label ${BOT_LABEL} created"
           else
-            echo "::notice::Label ${BOT_LABEL} already exists"
+            echo "Label ${BOT_LABEL} already exists"
           fi
 
       - name: Archive and recreate test branch
         if: steps.check_branch.outputs.test_branch_exists == 'true'
         env:
-          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch }}
           BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}
+          TEST_BRANCH: ${{ steps.get_test_branch.outputs.test_branch }}
         run: |
           # Create archive branch
           date_suffix=$(date +%Y-%m-%d)
@@ -119,17 +119,10 @@ jobs:
           git push origin --delete "${TEST_BRANCH}"
           echo "::notice::Deleted old test branch ${TEST_BRANCH}"
 
-          # Create new test branch
-          git fetch origin "${BASE_BRANCH}"
-          git checkout -b "${TEST_BRANCH}" "origin/${BASE_BRANCH}"
-          git push origin "${TEST_BRANCH}"
-          echo "::notice::Created new test branch ${TEST_BRANCH} from ${BASE_BRANCH}"
-
       - name: Create new test branch (if doesn't exist)
-        if: steps.check_branch.outputs.test_branch_exists == 'false'
         env:
           BASE_BRANCH: ${{ steps.get_base.outputs.base_branch }}
-          TEST_BRANCH: ${{ steps.sanitize.outputs.test_branch }}
+          TEST_BRANCH: ${{ steps.get_test_branch.outputs.test_branch }}
         run: |
           git fetch origin "${BASE_BRANCH}"
           git checkout -b "${TEST_BRANCH}" "origin/${BASE_BRANCH}"
