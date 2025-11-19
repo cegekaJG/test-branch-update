@@ -52,21 +52,15 @@ if echo "$TOKEN_INPUT" | jq -e . >/dev/null 2>&1; then
         -H "Accept: application/vnd.github+json" \
         "https://api.github.com/app")
 
-    if [ "$HTTP_CODE" -ne 200 ]; then
-        echo "::error::Failed to get GitHub App information (HTTP ${HTTP_CODE})" >&2
-        echo "::debug:: Response: $HTTP_CODE" >&2
-        # Only log error message, not full response to avoid exposing sensitive data
-        ERROR_MSG=$(echo "$INSTALLATION_RESPONSE" | jq -r '.message // "Unknown error"' 2>/dev/null || echo "Unknown error")
-        echo "Error message: $ERROR_MSG" >&2
-        exit 1
-    fi
-
     # Validate that we got valid JSON response
     if ! echo "$APP_INFO" | jq -e . >/dev/null 2>&1; then
         echo "::error::Failed to get valid response from GitHub API" >&2
         echo "Response: $APP_INFO" >&2
         exit 1
     fi
+
+    HTTP_CODE=$(echo "$APP_INFO" | jq -r '.message // empty' 2>/dev/null | grep -c 'Not Found')
+    echo "::debug::HTTP_CODE: $HTTP_CODE" >&2
 
     APP_SLUG=$(echo "$APP_INFO" | jq -r '.slug // empty')
     APP_NAME=$(echo "$APP_INFO" | jq -r '.name // empty')
