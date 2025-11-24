@@ -30,7 +30,6 @@ jobs:
       FEATURE_COMMITS: ''
       FEATURE_TEST_BRANCH: ''
       PICKED_COMMITS: ''
-      ADDED_COMMITS: ''
       NO_CHANGES: true
       MISSING_COMMITS: ''
       CHERRY_PICK_FAILED: false
@@ -61,6 +60,7 @@ jobs:
         run: |
           chmod +x .github/scripts/get-jwt.sh
           chmod +x .github/scripts/get-gh-token.sh
+          chmod +x .github/scripts/setup-git-identity.sh
 
       - name: 'Check for GitHub App JWT'
         id: get_app_jwt
@@ -196,7 +196,6 @@ jobs:
         run: |
           # Sanitize inputs to prevent code injection
           printf 'FEATURE_TEST_BRANCH=%s%s\n' "${FEATURE_TEST_PREFIX}" "${FEATURE_BRANCH}" >> $GITHUB_ENV
-          printf 'HEAD_REF=%s\n' "${FEATURE_BRANCH}" >> $GITHUB_ENV
           printf 'BASE_REF=%s\n' "${BASE_BRANCH}" >> $GITHUB_ENV
 
           # Set git settings
