@@ -19,24 +19,24 @@ env:
   AUTOMERGE: true
 
 jobs:
-  setup:
-    name: Initialize Update
+  update_test_branch:
+    name: Update Test Branch
     runs-on: ubuntu-latest
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      SKIP_ALL: false
+      FEATURE_COMMITS: ''
+      FEATURE_TEST_BRANCH: ''
+      PICKED_COMMITS: ''
+      NO_CHANGES: true
+      MISSING_COMMITS: ''
+      CHERRY_PICK_FAILED: false
     outputs:
-      test_branch: ${{ steps.set_config.outputs.TEST_BRANCH }}
-      feature_branch: ${{ steps.get_pr_info.outputs.HEAD_REF }}
-      base_branch: ${{ steps.get_pr_info.outputs.BASE_REF }}
-      feature_test_prefix: ${{ steps.set_config.outputs.FEATURE_TEST_PREFIX }}
-      bot_label: ${{ steps.set_config.outputs.BOT_LABEL }}
-      disable_comments: ${{ steps.set_config.outputs.DISABLE_COMMENTS }}
-      pr_exists: ${{ steps.check_pr.outputs.PR_EXISTS }}
-      RUN_URL: ${{ env.RUN_URL }}
-      AUTOMERGE: ${{ steps.set_config.outputs.AUTOMERGE }}
       progress_comment_id: ${{ steps.create_progress_comment.outputs.comment-id }}
+      disable_comments: ${{ steps.set_config.outputs.DISABLE_COMMENTS }}
+      RUN_URL: ${{ env.RUN_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -60,6 +60,7 @@ jobs:
         run: |
           chmod +x .github/scripts/get-jwt.sh
           chmod +x .github/scripts/get-gh-token.sh
+          chmod +x .github/scripts/setup-git-identity.sh
 
       - name: 'Check for GitHub App JWT'
         id: get_app_jwt
@@ -172,111 +173,382 @@ jobs:
             echo "Label ${BOT_LABEL} already exists"
           fi
 
-  call_core_workflow:
-    name: Call Core Update Workflow
-    needs: setup
-    uses: ./.github/workflows/UpdateTestBranchCore.yaml
-    secrets: inherit
-    with:
-      test_branch: ${{ needs.setup.outputs.test_branch }}
-      feature_branch: ${{ needs.setup.outputs.feature_branch }}
-      base_branch: ${{ needs.setup.outputs.base_branch }}
-      feature_test_prefix: ${{ needs.setup.outputs.feature_test_prefix }}
-
-  update_progress_comment:
-    name: Update Progress Comment
-    needs: [setup, call_core_workflow]
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    if: always() && github.event.issue.pull_request && startsWith(github.event.comment.body, '!update-test')
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 'Setup jq'
-        uses: dcarbone/install-jq-action@v3
-
-      - name: Add comment with outcome
-        uses: peter-evans/create-or-update-comment@v4
-        if: needs.setup.outputs.progress_comment_id == ''
-        with:
-          body: |
-            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
-
-            [View workflow run](${{ needs.setup.outputs.RUN_URL }})
-
-      - name: Update progress comment with outcome
-        uses: peter-evans/create-or-update-comment@v4
-        if: needs.setup.outputs.progress_comment_id != ''
-        with:
-          comment-id: ${{ needs.setup.outputs.progress_comment_id }}
-          edit-mode: replace
-          body: |
-            ${{ needs.call_core_workflow.result != 'success' && '❌ Update test branch workflow encountered an error.' || needs.call_core_workflow.outputs.no_changes == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (needs.call_core_workflow.outputs.cherry_pick_success == 'true' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
-
-            [View workflow run](${{ needs.setup.outputs.RUN_URL }})
-
-  update_prs:
-    name: Update Pull Requests
-    needs: [setup, call_core_workflow, update_progress_comment]
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 'Setup jq'
-        uses: dcarbone/install-jq-action@v3
-
-      - name: 'Set file permissions'
-        run: |
-          chmod +x .github/scripts/get-jwt.sh
-          chmod +x .github/scripts/get-gh-token.sh
-
-      - name: 'Check for GitHub App JWT'
-        id: get_app_jwt
-        env:
-          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
-        run: |
-          if [ -z "$CUSTOM_TOKEN" ]; then
-            echo "::error::The UPDATETESTTOKEN secret is required."
-            cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-          ## ⚠️ UPDATETESTTOKEN Secret Not Found
-
-          The UPDATETESTTOKEN secret is required to automatically trigger pull request workflows.
-          For information on how to add the repository secret, see: https://github.com/microsoft/AL-Go/blob/main/Scenarios/GhTokenWorkflow.md
-          EOF
-            exit 1
-          else
-            TOKEN_JWT_VALUE=$(.github/scripts/get-jwt.sh "$CUSTOM_TOKEN")
-            echo "TOKEN_JWT=$TOKEN_JWT_VALUE" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Setup GH_TOKEN
+      - name: Set up Git
         env:
           TOKEN_JWT: ${{ steps.get_app_jwt.outputs.TOKEN_JWT }}
-          CUSTOM_TOKEN: ${{ secrets.UPDATETESTTOKEN }}
         run: |
           if [ -n "$TOKEN_JWT" ]; then
-            echo "Using GitHub App JWT for authentication"
-            TOKEN_VALUE=$TOKEN_JWT
+            echo "Using GitHub App JWT for Git identity"
+            .github/scripts/setup-git-identity.sh "$TOKEN_JWT"
           else
-            echo "Using Personal Access Token for authentication"
-            TOKEN_VALUE=$CUSTOM_TOKEN
+            echo "Using GitHub Actions bot for Git identity"
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           fi
-          GH_TOKEN_VALUE=$(.github/scripts/get-gh-token.sh "$TOKEN_VALUE")
-          echo "GH_TOKEN=$GH_TOKEN_VALUE" >> $GITHUB_ENV
 
-      - name: 'Revert changes from setting permissions'
+      - name: Set environment variables for cherry-pick
+        if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+          FEATURE_TEST_PREFIX: ${{ steps.set_config.outputs.FEATURE_TEST_PREFIX }}
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+          BASE_BRANCH: ${{ steps.get_pr_info.outputs.BASE_REF }}
         run: |
-          git checkout -- .github/scripts/
+          # Sanitize inputs to prevent code injection
+          printf 'FEATURE_TEST_BRANCH=%s%s\n' "${FEATURE_TEST_PREFIX}" "${FEATURE_BRANCH}" >> $GITHUB_ENV
+          printf 'BASE_REF=%s\n' "${BASE_BRANCH}" >> $GITHUB_ENV
+
+          # Set git settings
+          git config set advice.mergeConflict false
+
+      - name: Check branch settings
+        if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+          BASE_BRANCH: ${{ steps.get_pr_info.outputs.BASE_REF }}
+        run: |
+          if [ "${FEATURE_BRANCH}" == "${TEST_BRANCH}" ]; then
+            echo "::error::You cannot update the test branch ${TEST_BRANCH} with itself."
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            exit 1
+          fi
+          if [ "${BASE_BRANCH}" == "${TEST_BRANCH}" ]; then
+            echo "::error::The base branch cannot be the same as the test branch ${TEST_BRANCH}."
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            exit 1
+          fi
+
+      - name: Check if test branch exists
+        if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+        run: |
+          if ! git ls-remote --heads origin | grep -q "refs/heads/${TEST_BRANCH}$"; then
+            echo "::error::Branch ${TEST_BRANCH} does not exist. Please create the branch first."
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            exit 1
+          fi
+
+      - name: Get list of feature commits
+        id: get_feature_commits
+        if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          BASE_BRANCH: ${{ steps.get_pr_info.outputs.BASE_REF }}
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+        run: |
+          git fetch origin "${BASE_BRANCH}"
+          git fetch origin "${FEATURE_BRANCH}"
+
+          feature_commits=$(git log --reverse --no-merges --pretty=format:%h "origin/${BASE_BRANCH}..origin/${FEATURE_BRANCH}")
+
+          if [ -z "$feature_commits" ]; then
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            echo "NO_CHANGES=true" >> $GITHUB_ENV
+            echo "::notice::No new commits found. Skipping update."
+            exit 0
+          fi
+
+          feature_commits_pretty=$(git log --reverse --no-merges --pretty=format:"- %s (%h)" "origin/${BASE_BRANCH}..origin/${FEATURE_BRANCH}")
+
+          echo -e 'Feature commits:\n'"$feature_commits_pretty"
+          for commit in $feature_commits; do
+            echo "::debug::$commit"
+          done
+
+          {
+            echo "FEATURE_COMMITS<<EOF"
+            echo "$feature_commits"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Checkout feature test branch
+        id: check_feat_test
+        if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+        run: |
+          feature_test_branch='${{ env.FEATURE_TEST_BRANCH }}'
+          if git ls-remote --heads origin | grep -q "refs/heads/$feature_test_branch$"; then
+            echo "Branch $feature_test_branch found."
+            git fetch origin "$feature_test_branch"
+            git checkout "$feature_test_branch"
+          else
+            echo "No branch $feature_test_branch found."
+            git checkout -b "$feature_test_branch" "origin/${TEST_BRANCH}"
+          fi
+
+      - name: Get list of already cherry-picked commits
+        id: get_cherry_picked_commits
+        if: ${{ env.SKIP_ALL == 'false' }}
+        env:
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+        run: |
+          git fetch origin "${TEST_BRANCH}"
+          git fetch origin "${FEATURE_BRANCH}"
+
+          # Get the timestamp of the earliest commit in the feature branch to use as cutoff point.
+          # Since we're dealing with two separate histories (test branch and feature branch),
+          # we use commit timestamps to determine which commits in the test feature branch
+          # could potentially contain cherry-picks from the feature branch.
+          earliest_feature_timestamp=$(git log --reverse --pretty=format:"%ct" "origin/${BASE_REF}..origin/${FEATURE_BRANCH}" | head -1)
+
+          commit_separator=$'\001'
+
+          if [ -n "$earliest_feature_timestamp" ]; then
+            echo "::debug::Earliest feature branch commit timestamp: $earliest_feature_timestamp ($(date -d @$earliest_feature_timestamp))"
+            # Compare test feature branch with base branch (not test branch) to see all cherry-picked commits
+            # (both merged and unmerged). Filter by timestamp to only examine commits made after
+            # the earliest feature branch commit, since cherry-picks must occur after the original commits.
+            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" --since="@$earliest_feature_timestamp" "origin/${BASE_REF}..${FEATURE_TEST_BRANCH}")
+          else
+            echo "::debug::No feature branch commits found, examining all test feature branch commits"
+            # Fallback: compare test feature branch with base branch to see all cherry-picked commits
+            feature_test_bodies=$(git log --reverse --pretty=format:"%B$commit_separator" "origin/${BASE_REF}..${FEATURE_TEST_BRANCH}")
+          fi
+
+          if [ -z "$feature_test_bodies" ]; then
+            echo "No new commits in \"$FEATURE_TEST_BRANCH\" found."
+            echo "PICKED_COMMITS=" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          feature_test_bodies=${feature_test_bodies%$commit_separator}
+
+          picked_commits=()
+          IFS=$commit_separator
+          for msg in $feature_test_bodies; do
+            echo "::debug::Full message:"
+            while IFS= read -r line; do
+              echo "::debug::  $line"
+            done <<< "$msg"
+            # Find all cherry-pick notices in the message (handles squash commits with multiple cherry-picks)
+            commits=$(echo -n "$msg" | grep -oP '(?<=\(cherry picked from commit )\S*(?=\))' || true)
+            if [[ -z "$commits" ]]; then
+              continue
+            fi
+            # Process each cherry-picked commit found
+            while IFS= read -r commit; do
+              if [[ $(git rev-parse --verify "$commit" 2>/dev/null) ]]; then
+                commit=${commit:0:8}
+                picked_commits+=("$commit")
+                echo "::debug::Commit $commit found."
+              else
+                echo "::debug::Commit $commit not found in the repository."
+              fi
+            done <<< "$commits"
+          done
+          unset IFS
+
+          if [ ${#picked_commits[@]} -eq 0 ]; then
+            echo "No previously cherry-picked commits found."
+            echo "PICKED_COMMITS=" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "Cherry-picked commits:"
+          for commit in "${picked_commits[@]}"; do
+            if git log --pretty=format:"- %s (%h)" -n 1 $commit 1>/dev/null 2>&1; then
+              echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)"
+            else
+              echo "- Unknown commit ($commit)"
+            fi
+          done
+
+          {
+            echo "PICKED_COMMITS<<EOF"
+            for commit in "${picked_commits[@]}"; do
+              printf "%s\n" "$commit"
+            done
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Determine commits to cherry-pick
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          feature_commits=(${{ env.FEATURE_COMMITS }})
+          picked_commits=(${{ env.PICKED_COMMITS }})
+
+          echo -e 'Feature commits: '"${feature_commits[*]}"
+          echo -e 'Picked commits: '"${picked_commits[*]:-None}"
+
+          new_commits=()
+          if [ -z "$picked_commits" ]; then
+            new_commits=("${feature_commits[@]}")
+          else
+            for feature_commit in "${feature_commits[@]}"; do
+              found=0
+              for picked in "${picked_commits[@]}"; do
+                if [[ "$picked" == "$feature_commit"* ]]; then
+                  found=1
+                  break
+                fi
+              done
+              if [ $found -eq 0 ]; then
+                new_commits+=("$feature_commit")
+              fi
+            done
+          fi
+
+          echo "## Commits to cherry-pick:" >> $GITHUB_STEP_SUMMARY
+
+          if [ ${#new_commits[@]} -eq 0 ]; then
+            echo "SKIP_ALL=true" >> $GITHUB_ENV
+            echo "NO_CHANGES=true" >> $GITHUB_ENV
+            echo "No new commits to cherry-pick found. Skipping update." >> $GITHUB_STEP_SUMMARY
+          else
+            for commit in "${new_commits[@]}"; do
+              echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+
+          {
+            echo "FEATURE_COMMITS<<EOF"
+            for commit in "${new_commits[@]}"; do
+              printf "%s\n" "$commit"
+            done
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Cherry-pick new commits
+        id: cherry_pick
+        if: ${{ env.SKIP_ALL == 'false' }}
+        run: |
+          feature_commits=(${{ env.FEATURE_COMMITS }})
+          echo "## Cherry-pick Process"
+          echo "Cherry-picking the following commits:"
+          echo "${feature_commits[*]}"
+          successful_commits=()
+          success=true
+          no_changes=true
+
+          set +e
+          for commit in "${feature_commits[@]}"; do
+            git cherry-pick --empty=keep -x $commit 1>/dev/null
+            if [ $? -ne 0 ]; then
+              echo "::error::Cherry-pick failed for commit $commit."
+              success=false
+              break
+            fi
+            if [ -n "$(git status --porcelain | grep '^U')" ]; then
+              echo "::error::Unmerged files detected after cherry-pick of $commit."
+              success=false
+              break
+            fi
+            successful_commits+=($commit)
+            commit_id=$(git rev-parse HEAD)
+            if ! git diff --quiet $commit_id^ $commit_id
+            then
+              no_changes=false
+            fi
+          done
+          set -e
+
+          echo "NO_CHANGES=$no_changes" >> $GITHUB_ENV
+          if [ "$success" = "false" ]; then
+            echo "CHERRY_PICK_FAILED=true" >> $GITHUB_ENV
+          else
+            echo "CHERRY_PICK_FAILED=false" >> $GITHUB_ENV
+          fi
+          {
+            echo "PICKED_COMMITS<<EOF"
+            for commit in "${successful_commits[@]}"; do
+              printf "%s\n" "$commit"
+            done
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+          if [ "$success" = "false" ]; then
+            echo "Cherry-pick failed."
+          else
+            echo "Cherry-pick successful."
+          fi
+
+      - name: "On success: Commit & push cherry-picked changes"
+        if: ${{ env.SKIP_ALL == 'false' && env.CHERRY_PICK_FAILED == 'false' }}
+        env:
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+        run: |
+          echo "**Final result: ✅ Success**" >> $GITHUB_STEP_SUMMARY
+          push=false
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit
+          fi
+          if git ls-remote --heads origin | grep -q "refs/heads/${FEATURE_TEST_BRANCH}$"; then
+            if [ -n "$(git log "origin/${FEATURE_TEST_BRANCH}..${FEATURE_TEST_BRANCH}")" ]; then
+              push=true
+            fi
+          else
+            if [ ${{ env.NO_CHANGES }} == 'false' ]; then
+              push=true
+            fi
+          fi
+          if [ $push == true ]; then
+            git push origin "${FEATURE_TEST_BRANCH}"
+          else
+            echo "No changes to push."
+          fi
+
+      - name: "On failure: Determine missing commits"
+        if: ${{ env.SKIP_ALL == 'false' && env.CHERRY_PICK_FAILED == 'true' }}
+        run: |
+          echo "**Final result: ❌ Failure**" >> $GITHUB_STEP_SUMMARY
+
+          feature_commits=(${{ env.FEATURE_COMMITS }})
+          picked_commits=(${{ env.PICKED_COMMITS }})
+
+          echo -e 'Feature commits: '"${feature_commits[*]}"
+          if [ -n "$picked_commits" ]; then
+            echo -e 'Picked commits: '"${picked_commits[*]}"
+          fi
+
+          missing_commits=()
+          for commit in "${feature_commits[@]}"; do
+            if [[ ! " ${picked_commits[@]} " =~ " $commit " ]] ; then
+              missing_commits+=($commit)
+            fi
+          done
+
+          echo '### Missing commits' >> $GITHUB_STEP_SUMMARY
+          while IFS= read -r commit; do
+            echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)" >> $GITHUB_STEP_SUMMARY
+          done <<< "${missing_commits[*]}"
+
+          {
+            echo "MISSING_COMMITS<<EOF"
+            echo "${missing_commits[*]}"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: "On failure: Abort cherry-pick & push changes"
+        if: ${{ env.SKIP_ALL == 'false' && env.CHERRY_PICK_FAILED == 'true' }}
+        env:
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+        run: |
+          git reset --hard
+          if [ -z "$(git log "origin/${FEATURE_TEST_BRANCH}..${FEATURE_TEST_BRANCH}")" ]; then
+            echo "Pushing empty commit to ${FEATURE_TEST_BRANCH} to create PR."
+            git commit --allow-empty -m "Cherry-pick of ${FEATURE_BRANCH} failed.
+
+          Manual resolution required."
+          fi
+          git push origin "${FEATURE_TEST_BRANCH}"
+          echo "NO_CHANGES=false" >> $GITHUB_ENV
+
+      - name: Update progress comment with core workflow outcome
+        uses: peter-evans/create-or-update-comment@v4
+        if: always()
+        with:
+          comment-id: ${{ steps.create_progress_comment.outputs.comment-id }}
+          edit-mode: replace
+          body: |
+            ${{ env.CHERRY_PICK_FAILED == 'false' && env.NO_CHANGES == 'true' && '✅ No new changes found to cherry-pick. Finishing workflow...' || (env.CHERRY_PICK_FAILED == 'false' && '✅ Cherry-pick completed successfully! Finishing workflow...' || '❌ Cherry-pick failed due to conflicts. Finishing workflow...') }}
+
+            [View workflow run](${{ env.RUN_URL }})
 
       - name: Check if feature test branch exists
         id: check_branch
-        env:
-          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
         run: |
           if git ls-remote --heads origin | grep -q "refs/heads/${FEATURE_TEST_BRANCH}$"; then
             echo "BRANCH_EXISTS=true" >> $GITHUB_OUTPUT
@@ -307,14 +579,13 @@ jobs:
 
       - name: Create/Update test pull request
         id: create_pr
-        if: needs.setup.outputs.pr_exists == 'true' || needs.call_core_workflow.outputs.no_changes == 'false' || (needs.setup.outputs.pr_exists == 'false' && steps.check_branch.outputs.branch_exists == 'true')
+        if: steps.check_pr.outputs.pr_exists == 'true' || env.NO_CHANGES == 'false' || (steps.check_pr.outputs.pr_exists == 'false' && steps.check_branch.outputs.branch_exists == 'true')
         env:
-          FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
-          BASE_BRANCH: ${{ needs.setup.outputs.base_branch }}
-          TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
-          BOT_LABEL: ${{ needs.setup.outputs.bot_label }}
-          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          PR_EXISTS: ${{ needs.setup.outputs.pr_exists }}
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+          BASE_BRANCH: ${{ steps.get_pr_info.outputs.BASE_REF }}
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
+          BOT_LABEL: ${{ steps.set_config.outputs.BOT_LABEL }}
+          PR_EXISTS: ${{ steps.check_pr.outputs.PR_EXISTS }}
           FEATURE_TITLE: ${{ github.event.issue.title }}
           FEATURE_PR_URL: ${{ steps.get_feature_pr_url.outputs.FEATURE_PR_URL }}
           ASSIGNEES_JSON: ${{ toJSON(github.event.issue.assignees) }}
@@ -367,18 +638,15 @@ jobs:
         if: steps.create_pr.outputs.test_pr_exists == 'true'
         env:
           TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
-          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
-          NO_CHANGES: ${{ needs.call_core_workflow.outputs.no_changes }}
         run: |
-          if [ "${CHERRY_PICK_SUCCESS}" == "true" ]; then
+          if [ "${CHERRY_PICK_FAILED}" == "false" ]; then
             gh pr ready "${FEATURE_TEST_BRANCH}"
           else
             gh pr ready --undo "${FEATURE_TEST_BRANCH}"
           fi
 
       - name: Enable auto-merge on test PR
-        if: steps.create_pr.outputs.test_pr_exists == 'true' && needs.call_core_workflow.outputs.cherry_pick_success == 'true' && needs.setup.outputs.automerge == 'true'
+        if: steps.create_pr.outputs.test_pr_exists == 'true' && env.CHERRY_PICK_FAILED == 'false' && steps.set_config.outputs.AUTOMERGE == 'true'
         env:
           TEST_PR_NUMBER: ${{ steps.create_pr.outputs.test_pr_number }}
         run: |
@@ -447,12 +715,10 @@ jobs:
             })();
 
       - name: Comment on test PR (on failure)
-        if: needs.call_core_workflow.outputs.cherry_pick_success == 'false' && needs.setup.outputs.disable_comments == 'false'
+        if: env.CHERRY_PICK_FAILED == 'true' && steps.set_config.outputs.DISABLE_COMMENTS == 'false'
         uses: peter-evans/create-or-update-comment@v4
         env:
-          TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
-          FEATURE_TEST_BRANCH: ${{ needs.call_core_workflow.outputs.feature_test_branch }}
-          MISSING_COMMITS: ${{ needs.call_core_workflow.outputs.missing_commits }}
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
         with:
           issue-number: ${{ steps.create_pr.outputs.test_pr_number }}
           body: |
@@ -472,18 +738,15 @@ jobs:
             3) Push the changes and set the PR to ready for review.
 
       - name: Update progress comment with final result
-        if: needs.setup.outputs.disable_comments == 'false'
+        if: steps.set_config.outputs.DISABLE_COMMENTS == 'false'
         uses: peter-evans/create-or-update-comment@v4
         env:
-          FEATURE_BRANCH: ${{ needs.setup.outputs.feature_branch }}
-          TEST_BRANCH: ${{ needs.setup.outputs.test_branch }}
+          FEATURE_BRANCH: ${{ steps.get_pr_info.outputs.HEAD_REF }}
+          TEST_BRANCH: ${{ steps.set_config.outputs.TEST_BRANCH }}
           TEST_PR_URL: ${{ steps.create_pr.outputs.test_pr_url }}
-          CHERRY_PICK_SUCCESS: ${{ needs.call_core_workflow.outputs.cherry_pick_success }}
-          NO_CHANGES: ${{ needs.call_core_workflow.outputs.no_changes }}
-          RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
           TEST_PR_EXISTS: ${{ steps.create_pr.outputs.test_pr_exists }}
         with:
-          comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          comment-id: ${{ steps.create_progress_comment.outputs.comment-id }}
           edit-mode: replace
           body: |
             ${{ env.NO_CHANGES == 'true' && env.TEST_PR_EXISTS == 'true' && format('✅ No new changes found to cherry-pick.
@@ -496,7 +759,7 @@ jobs:
 
             No new changes were found in `{0}` to update the `{1}` branch.
 
-            [View workflow run]({2})', env.FEATURE_BRANCH, env.TEST_BRANCH, env.RUN_URL) || env.CHERRY_PICK_SUCCESS == 'true' && format('✅ Cherry-pick completed successfully!
+            [View workflow run]({2})', env.FEATURE_BRANCH, env.TEST_BRANCH, env.RUN_URL) || env.CHERRY_PICK_FAILED == 'false' && format('✅ Cherry-pick completed successfully!
 
             The cherry-picked changes from `{0}` are ready to be added to the `{1}` branch.
 
@@ -510,11 +773,12 @@ jobs:
 
             [View workflow run]({3})', env.FEATURE_BRANCH, env.TEST_BRANCH, env.TEST_PR_URL, env.RUN_URL) }}
 
+
   comment_error:
     name: Update Progress Comment on Error
-    needs: [setup, call_core_workflow, update_prs]
+    needs: [update_test_branch]
     runs-on: ubuntu-latest
-    if: failure() && needs.setup.outputs.disable_comments == 'false'
+    if: failure() && needs.update_test_branch.outputs.disable_comments == 'false'
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -523,9 +787,9 @@ jobs:
 
       - name: Add comment with error
         uses: peter-evans/create-or-update-comment@v4
-        if: needs.setup.outputs.progress_comment_id == ''
+        if: needs.update_test_branch.outputs.progress_comment_id == ''
         env:
-          RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
+          RUN_URL: ${{ needs.update_test_branch.outputs.RUN_URL }}
         with:
           body: |
             ❌ An error occurred while updating the test branch.
@@ -535,14 +799,15 @@ jobs:
 
       - name: Update progress comment with error
         uses: peter-evans/create-or-update-comment@v4
-        if: needs.setup.outputs.progress_comment_id != ''
+        if: needs.update_test_branch.outputs.progress_comment_id != ''
         env:
-          RUN_URL: ${{ needs.setup.outputs.RUN_URL }}
+          RUN_URL: ${{ needs.update_test_branch.outputs.RUN_URL }}
         with:
-          comment-id: ${{ needs.setup.outputs.progress_comment_id }}
+          comment-id: ${{ needs.update_test_branch.outputs.progress_comment_id }}
           edit-mode: replace
           body: |
             ❌ An error occurred while updating the test branch.
 
             Please check the workflow run for details:
             [View workflow run](${{ env.RUN_URL }})
+
