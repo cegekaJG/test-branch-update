@@ -297,8 +297,11 @@ jobs:
 
           echo "Cherry-picked commits:"
           for commit in "${picked_commits[@]}"; do
-            commit_message=$(git log --format=%s -n 1 $commit)
-            echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)"
+            if git log --pretty=format:"- %s (%h)" -n 1 $commit 1>/dev/null 2>&1; then
+              echo "$(git log --pretty=format:"- %s (%h)" -n 1 $commit)"
+            else
+              echo "- Unknown commit ($commit)"
+            fi
           done
 
           {
